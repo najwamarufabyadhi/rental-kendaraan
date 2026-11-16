@@ -51,6 +51,19 @@ export default function VendorArmadaPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
 
+  // State untuk Modal Edit Unit
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
+  const [editBrand, setEditBrand] = useState('')
+  const [editModel, setEditModel] = useState('')
+  const [editYear, setEditYear] = useState(2024)
+  const [editTransmission, setEditTransmission] = useState<'automatic' | 'manual'>('automatic')
+  const [editPlateNumber, setEditPlateNumber] = useState('')
+  const [editDailyRate, setEditDailyRate] = useState('')
+  const [editDepositAmount, setEditDepositAmount] = useState('0')
+  const [editWithDriver, setEditWithDriver] = useState(false)
+  const [editIsActive, setEditIsActive] = useState(true)
+  const [editUpdating, setEditUpdating] = useState(false)
+
   // 1. Ambil ID Vendor dan daftar kendaraan miliknya saat halaman dibuka
   useEffect(() => {
     const initData = async () => {
@@ -163,6 +176,7 @@ export default function VendorArmadaPage() {
           deposit_amount: Number(depositAmount),
           with_driver: category === 'car' ? withDriver : false,
           image_url: primaryUrl,
+          is_active: true,
         })
         .select()
         .single()
@@ -215,10 +229,100 @@ export default function VendorArmadaPage() {
     }
   }
 
+  // 3. Membuka Modal Edit Unit & Memuat Data Unit
+  const handleOpenEdit = (v: Vehicle) => {
+    setEditingVehicle(v)
+    setEditBrand(v.brand)
+    setEditModel(v.model)
+    setEditYear(v.year)
+    setEditTransmission(v.transmission)
+    setEditPlateNumber(v.plate_number)
+    setEditDailyRate(String(v.daily_rate))
+    setEditDepositAmount(String(v.deposit_amount))
+    setEditWithDriver(v.with_driver)
+    setEditIsActive(v.is_active)
+  }
+
+  // 4. Menyimpan Hasil Perubahan Edit Unit
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingVehicle) return
+    setEditUpdating(true)
+
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .update({
+          brand: editBrand,
+          model: editModel,
+          year: Number(editYear),
+          transmission: editTransmission,
+          plate_number: editPlateNumber.toUpperCase(),
+          daily_rate: Number(editDailyRate),
+          deposit_amount: Number(editDepositAmount),
+          with_driver: editingVehicle.category === 'car' ? editWithDriver : false,
+          is_active: editIsActive,
+        })
+        .eq('id', editingVehicle.id)
+
+      if (error) {
+        throw new Error('Gagal memperbarui data armada: ' + error.message)
+      }
+
+      // Update state lokal armada
+      setVehicles(
+        vehicles.map((v) => {
+          if (v.id === editingVehicle.id) {
+            return {
+              ...v,
+              brand: editBrand,
+              model: editModel,
+              year: Number(editYear),
+              transmission: editTransmission,
+              plate_number: editPlateNumber.toUpperCase(),
+              daily_rate: Number(editDailyRate),
+              deposit_amount: Number(editDepositAmount),
+              with_driver: editingVehicle.category === 'car' ? editWithDriver : false,
+              is_active: editIsActive,
+            }
+          }
+          return v
+        })
+      )
+
+      alert('Data armada berhasil diperbarui!')
+      setEditingVehicle(null)
+    } catch (err: any) {
+      alert(err?.message || 'Terjadi kesalahan saat mengupdate kendaraan.')
+    } finally {
+      setEditUpdating(false)
+    }
+  }
+
+  // 5. Fungsi Menghapus Unit Kendaraan
+  const handleDeleteVehicle = async (id: string, name: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus unit "${name}" dari armada Anda?`)) return
+
+    try {
+      // Hapus data foto di vehicle_images terlebih dahulu
+      await supabase.from('vehicle_images').delete().eq('vehicle_id', id)
+
+      const { error } = await supabase.from('vehicles').delete().eq('id', id)
+      if (error) {
+        throw new Error('Gagal menghapus unit: ' + error.message)
+      }
+
+      setVehicles(vehicles.filter((v) => v.id !== id))
+      alert(`Unit ${name} berhasil dihapus dari sistem.`)
+    } catch (err: any) {
+      alert(err?.message || 'Gagal menghapus unit.')
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <p className="text-slate-500">Memuat data armada...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F0F4F9]">
+        <p className="text-slate-500 font-medium">Memuat data armada...</p>
       </div>
     )
   }
@@ -242,7 +346,7 @@ export default function VendorArmadaPage() {
                 Vendor Console
               </span>
               <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Manajemen Armada
+                Manajemen Armada Kendaraan
               </h1>
             </div>
           </div>
@@ -269,7 +373,7 @@ export default function VendorArmadaPage() {
           </div>
         </div>
 
-        {/* FORM TAMBAH ARMADA */}
+        {/* FORM TAMBAH ARMADA BARU */}
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
@@ -289,54 +393,58 @@ export default function VendorArmadaPage() {
                     setCategory('motorcycle')
                     setWithDriver(false)
                   }}
-                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${category === 'motorcycle'
+                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${
+                    category === 'motorcycle'
                       ? 'border-[#0F52BA] bg-[#0F52BA] text-white shadow-md shadow-blue-500/20'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                  }`}
                 >
                   🏍️ Sepeda Motor
                 </button>
                 <button
                   type="button"
                   onClick={() => setCategory('car')}
-                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${category === 'car'
+                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${
+                    category === 'car'
                       ? 'border-[#0F52BA] bg-[#0F52BA] text-white shadow-md shadow-blue-500/20'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                  }`}
                 >
                   🚗 Mobil
                 </button>
               </div>
             </div>
 
+            {/* Merek & Model */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Merek
+                Merek (Brand)
               </label>
               <input
                 type="text"
                 required
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                placeholder={category === 'motorcycle' ? 'Honda / Yamaha' : 'Toyota / Daihatsu'}
+                placeholder="Contoh: Honda / Toyota"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Model / Tipe
+                Tipe / Model
               </label>
               <input
                 type="text"
                 required
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                placeholder={category === 'motorcycle' ? 'Vario 160 / NMAX' : 'Avanza Veloz / Brio'}
+                placeholder="Contoh: Vario 160 / Avanza Veloz"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
             </div>
 
+            {/* Tahun & Transmisi */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
                 Tahun Pembuatan
@@ -344,11 +452,11 @@ export default function VendorArmadaPage() {
               <input
                 type="number"
                 required
-                min={2010}
-                max={2027}
+                min={2000}
+                max={2030}
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
             </div>
 
@@ -359,42 +467,45 @@ export default function VendorArmadaPage() {
               <select
                 value={transmission}
                 onChange={(e) => setTransmission(e.target.value as 'automatic' | 'manual')}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 bg-white text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               >
                 <option value="automatic">Automatic (Matic)</option>
                 <option value="manual">Manual</option>
               </select>
             </div>
 
+            {/* Plat Nomor */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Nomor Polisi (Plat)
+                Nomor Plat Polisi
               </label>
               <input
                 type="text"
                 required
                 value={plateNumber}
                 onChange={(e) => setPlateNumber(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 uppercase text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none font-mono"
-                placeholder="N 1234 AB"
+                placeholder="Contoh: N 1234 ABC"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
             </div>
 
+            {/* Tarif Harian */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Tarif Sewa / Hari (Rp)
+                Tarif Sewa Harian (Rp/hari)
               </label>
               <input
                 type="number"
                 required
-                min={10000}
+                min={0}
                 value={dailyRate}
                 onChange={(e) => setDailyRate(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                placeholder="100000"
+                placeholder="Contoh: 120000"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
             </div>
 
+            {/* Uang Jaminan (Deposit) */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
                 Uang Jaminan / Deposit (Rp)
@@ -404,64 +515,72 @@ export default function VendorArmadaPage() {
                 min={0}
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
-                placeholder="0 jika tanpa deposit"
+                placeholder="0"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Uang jaminan dikembalikan ke penyewa saat unit kembali dengan aman.
+              </p>
             </div>
 
-            {/* Opsi Khusus Mobil: Dengan Supir */}
+            {/* Pilihan Layanan dengan Supir (Khusus Mobil) */}
             {category === 'car' && (
-              <div className="flex items-center pt-3">
+              <div className="flex items-center gap-3 md:col-span-2 p-3 bg-blue-50/60 rounded-xl border border-blue-100">
                 <input
-                  id="withDriver"
                   type="checkbox"
+                  id="withDriver"
                   checked={withDriver}
                   onChange={(e) => setWithDriver(e.target.checked)}
-                  className="w-4 h-4 text-[#0F52BA] border-slate-300 rounded focus:ring-[#0F52BA]"
+                  className="w-4 h-4 text-[#0F52BA] rounded"
                 />
-                <label htmlFor="withDriver" className="ml-2.5 text-xs font-semibold text-slate-700">
-                  Tersedia opsi sewa <strong>Dengan Supir</strong>
+                <label htmlFor="withDriver" className="text-xs font-semibold text-slate-800 cursor-pointer">
+                  Sediakan Opsi "Dengan Supir" untuk unit mobil ini (bebas deposit bagi penyewa)
                 </label>
               </div>
             )}
 
-            {/* Input Multi-Foto Armada */}
-            <div className="md:col-span-2 pt-3 border-t border-slate-100">
+            {/* Upload Banyak Foto Armada */}
+            <div className="md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Galeri Foto Kendaraan (Bisa pilih beberapa foto sekaligus)
+                Foto Armada Kendaraan (Bisa Pilih Banyak Foto Sekaligus)
               </label>
-              <p className="text-xs text-slate-500 mb-2.5">
-                Foto urutan pertama otomatis dijadikan foto sampul utama di katalog.
-              </p>
               <input
                 type="file"
+                accept="image/*"
                 multiple
-                accept="image/png, image/jpeg, image/webp"
                 onChange={handleSelectFiles}
-                className="w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#0F52BA] hover:file:bg-blue-100 cursor-pointer"
+                className="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#0F52BA] file:text-white hover:file:bg-[#1E3A8A] cursor-pointer"
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Format didukung: JPG, PNG, WEBP. Foto urutan pertama akan otomatis dijadikan foto sampul utama.
+              </p>
 
-              {/* Preview Foto */}
+              {/* Preview Foto-foto yang Dipilih */}
               {imagePreviews.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {imagePreviews.map((preview, index) => (
-                    <div key={index} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-                      <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
-                      {index === 0 && (
-                        <span className="absolute bottom-1.5 left-1.5 right-1.5 text-[9px] bg-[#0F52BA] text-white text-center py-0.5 rounded font-bold uppercase">
-                          Sampul
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFile(index)}
-                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-90 hover:opacity-100 shadow"
-                        title="Hapus foto ini"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-700 mb-2">
+                    Preview Foto ({imagePreviews.length} Foto Dipilih):
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    {imagePreviews.map((url, idx) => (
+                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-square bg-slate-100">
+                        <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        {idx === 0 && (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] bg-[#0F52BA] text-white font-bold">
+                            Utama
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(idx)}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow"
+                          title="Hapus foto ini"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -470,9 +589,9 @@ export default function VendorArmadaPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-3 bg-gradient-to-r from-[#EF4444] to-[#DC2626] hover:from-[#DC2626] hover:to-[#B91C1C] text-white text-sm font-bold rounded-xl shadow-lg shadow-red-500/20 disabled:opacity-50 transition transform active:scale-[0.99]"
+                className="px-8 py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold text-sm rounded-xl shadow-md shadow-red-500/25 transition transform active:scale-95 disabled:opacity-50"
               >
-                {saving ? 'Menyimpan Unit & Mengunggah Foto...' : '+ Tambahkan ke Armada'}
+                {saving ? 'Sedang Mengunggah & Menyimpan...' : '+ Tambahkan ke Katalog Armada'}
               </button>
             </div>
           </form>
@@ -485,7 +604,7 @@ export default function VendorArmadaPage() {
               Daftar Armada Aktif ({vehicles.length} Unit)
             </h2>
             <span className="text-xs text-slate-500 font-medium">
-              Tersedia untuk disewa
+              Kelola, edit tarif, atau perbarui informasi unit Anda
             </span>
           </div>
 
@@ -496,32 +615,54 @@ export default function VendorArmadaPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {vehicles.map((item) => {
-                const primaryImg = item.vehicle_images?.find((img) => img.is_primary)?.image_url || item.vehicle_images?.[0]?.image_url || item.image_url
+                const primaryImg =
+                  item.vehicle_images?.find((img) => img.is_primary)?.image_url ||
+                  item.vehicle_images?.[0]?.image_url ||
+                  item.image_url
                 const photoCount = item.vehicle_images?.length || (item.image_url ? 1 : 0)
 
                 return (
-                  <div key={item.id} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition">
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition group"
+                  >
                     <div>
                       {primaryImg ? (
-                        <div className="relative w-full h-40 rounded-xl overflow-hidden mb-3.5 bg-slate-100">
-                          <img src={primaryImg} alt={`${item.brand} ${item.model}`} className="w-full h-full object-cover" />
+                        <div className="relative w-full h-44 rounded-xl overflow-hidden mb-3.5 bg-slate-100">
+                          <img
+                            src={primaryImg}
+                            alt={`${item.brand} ${item.model}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          />
                           {photoCount > 1 && (
-                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[11px] bg-slate-900/75 text-white font-medium backdrop-blur-sm">
+                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[11px] bg-slate-900/80 text-white font-bold backdrop-blur-sm">
                               📷 {photoCount} Foto
                             </span>
                           )}
+                          <span
+                            className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold ${
+                              item.is_active
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-slate-700 text-slate-200'
+                            }`}
+                          >
+                            {item.is_active ? '● Aktif' : '○ Nonaktif'}
+                          </span>
                         </div>
                       ) : (
-                        <div className="w-full h-28 rounded-xl mb-3.5 bg-slate-50 border border-slate-100 flex items-center justify-center text-xs text-slate-400">
+                        <div className="w-full h-32 rounded-xl mb-3.5 bg-slate-50 border border-slate-100 flex items-center justify-center text-xs text-slate-400">
                           Belum ada foto
                         </div>
                       )}
 
                       <div className="flex justify-between items-start">
-                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-blue-100 text-[#0F52BA]'
-                          }`}>
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            item.category === 'motorcycle'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-blue-100 text-[#0F52BA]'
+                          }`}
+                        >
                           {item.category === 'motorcycle' ? '🏍️ Motor' : '🚗 Mobil'}
                         </span>
                         <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-bold">
@@ -533,23 +674,45 @@ export default function VendorArmadaPage() {
                         {item.brand} {item.model}
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5 capitalize">
-                        Tahun {item.year} • {item.transmission} {item.with_driver ? '• Tersedia Supir' : '• Lepas Kunci'}
+                        Tahun {item.year} • {item.transmission}{' '}
+                        {item.with_driver ? '• Tersedia Supir' : '• Lepas Kunci'}
                       </p>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
-                      <div>
-                        <span className="text-xs text-slate-400 block">Tarif Sewa</span>
-                        <span className="font-extrabold text-slate-900">
-                          Rp {item.daily_rate.toLocaleString('id-ID')}
-                          <span className="text-xs font-normal text-slate-500">/hari</span>
-                        </span>
+                    <div>
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-semibold">Tarif Sewa</span>
+                          <span className="font-black text-slate-900 text-base">
+                            Rp {item.daily_rate.toLocaleString('id-ID')}
+                            <span className="text-xs font-normal text-slate-500">/hari</span>
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-400 block font-semibold">Uang Jaminan</span>
+                          <span className="text-xs font-bold text-slate-700">
+                            Rp {item.deposit_amount.toLocaleString('id-ID')}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400 block">Jaminan</span>
-                        <span className="text-xs font-semibold text-slate-700">
-                          Rp {item.deposit_amount.toLocaleString('id-ID')}
-                        </span>
+
+                      {/* Tombol Aksi: Edit & Hapus */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(item)}
+                          className="flex-1 py-2 px-3 bg-[#0F52BA] hover:bg-[#1E3A8A] text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5"
+                        >
+                          <span>✏️</span> Edit Unit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteVehicle(item.id, `${item.brand} ${item.model}`)}
+                          className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition"
+                          title="Hapus Unit"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -560,7 +723,179 @@ export default function VendorArmadaPage() {
         </div>
 
       </div>
+
+      {/* MODAL EDIT UNIT POP-UP */}
+      {editingVehicle && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-xl p-6 md:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-[10px] font-bold text-[#0F52BA] uppercase tracking-wider">
+                  Update Informasi Armada
+                </span>
+                <h2 className="text-xl font-black text-slate-900">
+                  Edit Unit {editingVehicle.brand} {editingVehicle.model}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingVehicle(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Merek (Brand)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editBrand}
+                    onChange={(e) => setEditBrand(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tipe / Model
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editModel}
+                    onChange={(e) => setEditModel(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tahun Pembuatan
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={2000}
+                    max={2030}
+                    value={editYear}
+                    onChange={(e) => setEditYear(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Transmisi
+                  </label>
+                  <select
+                    value={editTransmission}
+                    onChange={(e) => setEditTransmission(e.target.value as 'automatic' | 'manual')}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  >
+                    <option value="automatic">Automatic (Matic)</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Plat Nomor Polisi
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editPlateNumber}
+                    onChange={(e) => setEditPlateNumber(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm uppercase focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tarif Harian (Rp/hari)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={editDailyRate}
+                    onChange={(e) => setEditDailyRate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Uang Jaminan / Deposit (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editDepositAmount}
+                    onChange={(e) => setEditDepositAmount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Status Opsi Supir (Mobil Saja) */}
+              {editingVehicle.category === 'car' && (
+                <div className="flex items-center gap-3 p-3 bg-blue-50/60 rounded-xl border border-blue-100">
+                  <input
+                    type="checkbox"
+                    id="editWithDriver"
+                    checked={editWithDriver}
+                    onChange={(e) => setEditWithDriver(e.target.checked)}
+                    className="w-4 h-4 text-[#0F52BA] rounded"
+                  />
+                  <label htmlFor="editWithDriver" className="text-xs font-semibold text-slate-800 cursor-pointer">
+                    Sediakan Opsi "Dengan Supir" untuk unit ini
+                  </label>
+                </div>
+              )}
+
+              {/* Status Ketersediaan Unit (Aktif / Nonaktif) */}
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="editIsActive"
+                  checked={editIsActive}
+                  onChange={(e) => setEditIsActive(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded"
+                />
+                <label htmlFor="editIsActive" className="text-xs font-semibold text-slate-800 cursor-pointer">
+                  Unit Aktif (Tampilkan di marketplace penyewaan). Nonaktifkan bila unit sedang servis/rusak.
+                </label>
+              </div>
+
+              {/* Tombol Simpan & Batal */}
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingVehicle(null)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={editUpdating}
+                  className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-500/25 transition disabled:opacity-50"
+                >
+                  {editUpdating ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
-
 }
