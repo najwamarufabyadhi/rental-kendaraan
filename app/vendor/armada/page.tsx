@@ -214,14 +214,6 @@ export default function VendorArmadaPage() {
       setSaving(false)
     }
   }
-    setModel('')
-    setPlateNumber('')
-    setDailyRate('')
-    setDepositAmount('0')
-    setWithDriver(false)
-    setImageFile(null)
-    setSaving(false)
-  }
 
   if (loading) {
     return (
