@@ -5,6 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+interface VehicleImage {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
 interface VehicleDetail {
   id: string
   vendor_id: string
@@ -17,6 +24,8 @@ interface VehicleDetail {
   daily_rate: number
   with_driver: boolean
   deposit_amount: number
+  image_url?: string | null
+  vehicle_images?: VehicleImage[]
   vendors: {
     business_name: string
     city: string
@@ -28,11 +37,12 @@ function VehicleBookingContent() {
   const params = useParams()
   const router = useRouter()
   const supabase = createClient()
-  const vehicleId = params.id as string
+  const vehicleId = params?.id as string
 
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0)
 
   // State Form Pemesanan
   const [serviceType, setServiceType] = useState<'self_drive' | 'with_driver'>('self_drive')
@@ -41,11 +51,19 @@ function VehicleBookingContent() {
   const [pickupLocation, setPickupLocation] = useState('')
 
   useEffect(() => {
+    if (!vehicleId) return
+
     const fetchDetail = async () => {
       const { data, error } = await supabase
         .from('vehicles')
         .select(`
           *,
+          vehicle_images (
+            id,
+            image_url,
+            is_primary,
+            sort_order
+          ),
           vendors (
             business_name,
             city,
@@ -83,6 +101,13 @@ function VehicleBookingContent() {
   // Sesuai aturan bisnis: Jika dengan supir, uang deposit Rp 0
   const activeDeposit = vehicle && serviceType === 'self_drive' ? vehicle.deposit_amount : 0
   const grandTotal = basePrice + activeDeposit
+
+  // Kumpulan foto dari tabel vehicle_images, dengan fallback ke vehicle.image_url
+  const galleryImages = (vehicle?.vehicle_images && vehicle.vehicle_images.length > 0)
+    ? vehicle.vehicle_images.map((img) => img.image_url)
+    : (vehicle?.image_url ? [vehicle.image_url] : [])
+
+  const activePhoto = galleryImages[selectedPhotoIndex] || galleryImages[0]
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -169,7 +194,50 @@ function VehicleBookingContent() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Kolom Kiri: Info Kendaraan & Vendor */}
           <div className="md:col-span-2 bg-white p-6 rounded-xl border border-slate-200 space-y-4">
-            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full uppercase">
+            
+            {/* Galeri Foto Kendaraan */}
+            {galleryImages.length > 0 ? (
+              <div className="space-y-2">
+                <div className="relative w-full h-64 md:h-80 rounded-xl overflow-hidden bg-slate-100">
+                  <img
+                    src={activePhoto}
+                    alt={`${vehicle.brand} ${vehicle.model}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {galleryImages.length > 1 && (
+                    <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md text-xs bg-slate-900/80 text-white font-medium backdrop-blur-sm">
+                      Foto {selectedPhotoIndex + 1} dari {galleryImages.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Thumbnail Galeri untuk navigasi foto */}
+                {galleryImages.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1 pt-1">
+                    {galleryImages.map((imgUrl, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedPhotoIndex(idx)}
+                        className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                          selectedPhotoIndex === idx
+                            ? 'border-emerald-600 ring-2 ring-emerald-200'
+                            : 'border-slate-200 opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-full h-48 rounded-xl bg-slate-100 flex items-center justify-center text-sm text-slate-400">
+                Tidak ada foto tersedia untuk kendaraan ini
+              </div>
+            )}
+
+            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full uppercase inline-block">
               {vehicle.category === 'motorcycle' ? 'Sepeda Motor' : 'Mobil'} • {vehicle.transmission}
             </span>
 

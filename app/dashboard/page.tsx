@@ -5,6 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+interface VehicleImage {
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
 // Definisi struktur data gabungan antara tabel vehicles dan vendors
 interface MarketplaceVehicle {
   id: string
@@ -17,6 +23,7 @@ interface MarketplaceVehicle {
   with_driver: boolean
   deposit_amount: number
   image_url: string | null
+  vehicle_images?: VehicleImage[]
   vendors: {
     business_name: string
     city: string
@@ -43,7 +50,7 @@ export default function CustomerDashboard() {
         return
       }
 
-      // Query dengan relasi ke tabel 'vendors'
+      // Query dengan relasi ke tabel 'vendors' dan 'vehicle_images'
       const { data, error } = await supabase
         .from('vehicles')
         .select(`
@@ -57,6 +64,11 @@ export default function CustomerDashboard() {
           with_driver,
           deposit_amount,
           image_url,
+          vehicle_images (
+            image_url,
+            is_primary,
+            sort_order
+          ),
           vendors (
             business_name,
             city
@@ -169,25 +181,38 @@ export default function CustomerDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredVehicles.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between hover:shadow-md transition"
-              >
-                <div>
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt={`${item.brand} ${item.model}`}
-                      className="w-full h-44 object-cover rounded-lg mb-3 bg-slate-100"
-                    />
-                  ) : (
-                    <div className="w-full h-44 rounded-lg mb-3 bg-slate-100 flex items-center justify-center text-xs text-slate-400">
-                      Tidak ada foto
-                    </div>
-                  )}
+            {filteredVehicles.map((item) => {
+              const primaryImg = item.vehicle_images?.find((img) => img.is_primary)?.image_url
+                || item.vehicle_images?.[0]?.image_url
+                || item.image_url
+              const photoCount = item.vehicle_images?.length || (item.image_url ? 1 : 0)
 
-                  <div className="flex justify-between items-center">
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between hover:shadow-md transition"
+                >
+                  <div>
+                    {primaryImg ? (
+                      <div className="relative w-full h-44 rounded-lg mb-3 overflow-hidden bg-slate-100">
+                        <img
+                          src={primaryImg}
+                          alt={`${item.brand} ${item.model}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {photoCount > 1 && (
+                          <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[11px] bg-slate-900/75 text-white font-medium">
+                            📷 {photoCount} Foto
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-44 rounded-lg mb-3 bg-slate-100 flex items-center justify-center text-xs text-slate-400">
+                        Tidak ada foto
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center">
                     <span
                       className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
                           ? 'bg-amber-100 text-amber-800'
@@ -240,7 +265,8 @@ export default function CustomerDashboard() {
                   </Link>
                 </div>
               </div>
-            ))}
+            )
+          })}
           </div>
         )}
       </main>

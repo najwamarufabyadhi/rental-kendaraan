@@ -134,11 +134,11 @@ export default function VendorBookingsPage() {
                                                 {item.service_type === 'self_drive' ? 'Lepas Kunci' : 'Dengan Supir'}
                                             </span>
                                             <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
-                                                {item.vehicles.plate_number}
+                                                {item.vehicles?.plate_number}
                                             </span>
                                         </div>
                                         <h2 className="text-lg font-bold text-slate-900 mt-1.5">
-                                            {item.vehicles.brand} {item.vehicles.model}
+                                            {item.vehicles?.brand} {item.vehicles?.model}
                                         </h2>
                                     </div>
 

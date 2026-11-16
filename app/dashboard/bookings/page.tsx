@@ -115,9 +115,9 @@ export default function CustomerBookingsPage() {
                                     <div>
                                         <span className="text-xs font-mono text-slate-400">ID: {item.id.slice(0, 8)}</span>
                                         <h2 className="text-lg font-bold text-slate-900">
-                                            {item.vehicles.brand} {item.vehicles.model}{' '}
+                                            {item.vehicles?.brand} {item.vehicles?.model}{' '}
                                             <span className="text-sm font-normal text-slate-500">
-                                                ({item.vehicles.plate_number})
+                                                ({item.vehicles?.plate_number})
                                             </span>
                                         </h2>
                                     </div>
@@ -135,7 +135,7 @@ export default function CustomerBookingsPage() {
                                     <div>
                                         <p className="text-slate-500">Layanan & Mitra</p>
                                         <p className="font-medium text-slate-900">
-                                            {item.service_type === 'self_drive' ? 'Lepas Kunci' : 'Dengan Supir'} • {item.vendors.business_name}
+                                            {item.service_type === 'self_drive' ? 'Lepas Kunci' : 'Dengan Supir'} • {item.vendors?.business_name}
                                         </p>
                                     </div>
 

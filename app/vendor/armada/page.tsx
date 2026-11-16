@@ -5,6 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+interface VehicleImage {
+  id: string
+  image_url: string
+  is_primary: boolean
+  sort_order: number
+}
+
 // Definisi struktur data Kendaraan untuk TypeScript
 interface Vehicle {
   id: string
@@ -18,6 +25,8 @@ interface Vehicle {
   with_driver: boolean
   deposit_amount: number
   is_active: boolean
+  image_url?: string | null
+  vehicle_images?: VehicleImage[]
 }
 
 export default function VendorArmadaPage() {
@@ -39,7 +48,9 @@ export default function VendorArmadaPage() {
   const [dailyRate, setDailyRate] = useState('')
   const [depositAmount, setDepositAmount] = useState('0')
   const [withDriver, setWithDriver] = useState(false)
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+
   // 1. Ambil ID Vendor dan daftar kendaraan miliknya saat halaman dibuka
   useEffect(() => {
     const initData = async () => {
@@ -63,15 +74,23 @@ export default function VendorArmadaPage() {
 
       setVendorId(vendorData.id)
 
-      // Ambil semua kendaraan milik vendor ini
+      // Ambil semua kendaraan milik vendor ini beserta galeri fotonya
       const { data: vehicleList } = await supabase
         .from('vehicles')
-        .select('*')
+        .select(`
+          *,
+          vehicle_images (
+            id,
+            image_url,
+            is_primary,
+            sort_order
+          )
+        `)
         .eq('vendor_id', vendorData.id)
         .order('created_at', { ascending: false })
 
       if (vehicleList) {
-        setVehicles(vehicleList)
+        setVehicles(vehicleList as unknown as Vehicle[])
       }
       setLoading(false)
     }
@@ -79,66 +98,122 @@ export default function VendorArmadaPage() {
     initData()
   }, [router, supabase])
 
-  // 2. Fungsi menyimpan unit baru ke tabel 'vehicles'
+  // Handler memilih banyak file foto
+  const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selected = Array.from(e.target.files)
+      setImageFiles(selected)
+      const previews = selected.map((file) => URL.createObjectURL(file))
+      setImagePreviews(previews)
+    }
+  }
+
+  // Handler menghapus satu foto dari daftar preview sebelum diunggah
+  const handleRemoveFile = (index: number) => {
+    const updatedFiles = imageFiles.filter((_, i) => i !== index)
+    const updatedPreviews = imagePreviews.filter((_, i) => i !== index)
+    setImageFiles(updatedFiles)
+    setImagePreviews(updatedPreviews)
+  }
+
+  // 2. Fungsi menyimpan unit baru ke tabel 'vehicles' dan 'vehicle_images'
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!vendorId) return
     setSaving(true)
 
-    let uploadedImageUrl: string | null = null
+    try {
+      const uploadedUrls: string[] = []
 
-    // 1. Jika vendor memilih file foto, unggah ke Supabase Storage dulu
-    if (imageFile) {
-      const fileExt = imageFile.name.split('.').pop()
-      const fileName = `${vendorId}-${Date.now()}.${fileExt}`
+      // 1. Unggah semua file foto ke Supabase Storage ('vehicle-images')
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i]
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${vendorId}-${Date.now()}-${i}.${fileExt}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('vehicle-images')
-        .upload(fileName, imageFile)
+        const { error: uploadError } = await supabase.storage
+          .from('vehicle-images')
+          .upload(fileName, file)
 
-      if (uploadError) {
-        alert('Gagal mengunggah foto: ' + uploadError.message)
-        setSaving(false)
-        return
+        if (uploadError) {
+          throw new Error('Gagal mengunggah foto: ' + uploadError.message)
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('vehicle-images')
+          .getPublicUrl(fileName)
+
+        uploadedUrls.push(publicUrlData.publicUrl)
       }
 
-      // Ambil alamat URL publik dari foto yang baru diunggah
-      const { data: publicUrlData } = supabase.storage
-        .from('vehicle-images')
-        .getPublicUrl(fileName)
+      // 2. Simpan data kendaraan ke tabel 'vehicles'
+      const primaryUrl = uploadedUrls.length > 0 ? uploadedUrls[0] : null
 
-      uploadedImageUrl = publicUrlData.publicUrl
-    }
+      const { data: newVehicle, error: vehicleError } = await supabase
+        .from('vehicles')
+        .insert({
+          vendor_id: vendorId,
+          category: category,
+          brand: brand,
+          model: model,
+          year: Number(year),
+          transmission: transmission,
+          plate_number: plateNumber.toUpperCase(),
+          daily_rate: Number(dailyRate),
+          deposit_amount: Number(depositAmount),
+          with_driver: category === 'car' ? withDriver : false,
+          image_url: primaryUrl,
+        })
+        .select()
+        .single()
 
-    // 2. Simpan data kendaraan beserta URL fotonya ke tabel 'vehicles'
-    const { data: newVehicle, error } = await supabase
-      .from('vehicles')
-      .insert({
-        vendor_id: vendorId,
-        category: category,
-        brand: brand,
-        model: model,
-        year: Number(year),
-        transmission: transmission,
-        plate_number: plateNumber.toUpperCase(),
-        daily_rate: Number(dailyRate),
-        deposit_amount: Number(depositAmount),
-        with_driver: category === 'car' ? withDriver : false,
-        image_url: uploadedImageUrl,
-      })
-      .select()
-      .single()
+      if (vehicleError) {
+        throw new Error('Gagal menambah kendaraan: ' + vehicleError.message)
+      }
 
-    if (error) {
-      alert('Gagal menambah kendaraan: ' + error.message)
+      // 3. Simpan setiap foto ke tabel relasi 'vehicle_images'
+      let savedImages: VehicleImage[] = []
+      if (uploadedUrls.length > 0) {
+        const imageRecords = uploadedUrls.map((url, idx) => ({
+          vehicle_id: newVehicle.id,
+          image_url: url,
+          is_primary: idx === 0, // Foto pertama sebagai foto sampul utama
+          sort_order: idx,
+        }))
+
+        const { data: insertedImages, error: imgError } = await supabase
+          .from('vehicle_images')
+          .insert(imageRecords)
+          .select()
+
+        if (!imgError && insertedImages) {
+          savedImages = insertedImages as VehicleImage[]
+        }
+      }
+
+      const vehicleWithImages: Vehicle = {
+        ...newVehicle,
+        vehicle_images: savedImages,
+      }
+
+      setVehicles([vehicleWithImages, ...vehicles])
+
+      // Reset form
+      setBrand('')
+      setModel('')
+      setPlateNumber('')
+      setDailyRate('')
+      setDepositAmount('0')
+      setWithDriver(false)
+      setImageFiles([])
+      setImagePreviews([])
+      alert('Kendaraan dan galeri foto berhasil ditambahkan!')
+    } catch (err: any) {
+      alert(err?.message || 'Terjadi kesalahan saat menyimpan kendaraan.')
+    } finally {
       setSaving(false)
-      return
     }
-
-    setVehicles([newVehicle, ...vehicles])
-
-    // Reset form
-    setBrand('')
+  }
     setModel('')
     setPlateNumber('')
     setDailyRate('')
@@ -168,22 +243,6 @@ export default function VendorArmadaPage() {
             </Link>
             <h1 className="text-2xl font-bold text-slate-900 mt-1">Manajemen Armada</h1>
           </div>
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Foto Kendaraan (JPG / PNG)
-          </label>
-          <input
-            type="file"
-            accept="image/png, image/jpeg, image/webp"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                setImageFile(e.target.files[0])
-              }
-            }}
-            className="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
-          />
         </div>
 
         {/* FORM TAMBAH ARMADA */}
@@ -323,13 +382,54 @@ export default function VendorArmadaPage() {
               </div>
             )}
 
+            {/* Input Multi-Foto Armada */}
+            <div className="md:col-span-2 pt-2 border-t border-slate-100">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Galeri Foto Kendaraan (Bisa pilih beberapa foto sekaligus)
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Pilih foto eksterior (depan, samping, belakang) dan interior. Foto urutan pertama akan otomatis dijadikan foto sampul utama.
+              </p>
+              <input
+                type="file"
+                multiple
+                accept="image/png, image/jpeg, image/webp"
+                onChange={handleSelectFiles}
+                className="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+              />
+
+              {/* Preview Foto-Foto yang Dipilih */}
+              {imagePreviews.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {imagePreviews.map((preview, index) => (
+                    <div key={index} className="relative group w-24 h-24 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                      <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                      {index === 0 && (
+                        <span className="absolute bottom-1 left-1 right-1 text-[10px] bg-slate-900/80 text-white text-center py-0.5 rounded font-medium">
+                          Sampul
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index)}
+                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-80 hover:opacity-100"
+                        title="Hapus foto ini"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2 pt-2">
               <button
                 type="submit"
                 disabled={saving}
                 className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg disabled:opacity-50"
               >
-                {saving ? 'Menyimpan Unit...' : '+ Tambahkan ke Armada'}
+                {saving ? 'Menyimpan Unit & Mengunggah Foto...' : '+ Tambahkan ke Armada'}
               </button>
             </div>
           </form>
@@ -347,42 +447,62 @@ export default function VendorArmadaPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicles.map((item) => (
-                <div key={item.id} className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-start">
-                      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
-                        }`}>
-                        {item.category === 'motorcycle' ? 'Motor' : 'Mobil'}
-                      </span>
-                      <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-700">
-                        {item.plate_number}
-                      </span>
-                    </div>
+              {vehicles.map((item) => {
+                const primaryImg = item.vehicle_images?.find((img) => img.is_primary)?.image_url || item.vehicle_images?.[0]?.image_url || item.image_url
+                const photoCount = item.vehicle_images?.length || (item.image_url ? 1 : 0)
 
-                    <h3 className="text-lg font-bold text-slate-900 mt-2">
-                      {item.brand} {item.model} ({item.year})
-                    </h3>
-                    <p className="text-sm text-slate-500 capitalize">
-                      Transmisi: {item.transmission} {item.with_driver ? '• Tersedia Supir' : '• Lepas Kunci'}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                return (
+                  <div key={item.id} className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col justify-between">
                     <div>
-                      <span className="text-slate-500">Tarif: </span>
-                      <span className="font-bold text-slate-900">
-                        Rp {item.daily_rate.toLocaleString('id-ID')}/hari
+                      {primaryImg ? (
+                        <div className="relative w-full h-36 rounded-lg overflow-hidden mb-3 bg-slate-100">
+                          <img src={primaryImg} alt={`${item.brand} ${item.model}`} className="w-full h-full object-cover" />
+                          {photoCount > 1 && (
+                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[11px] bg-slate-900/75 text-white font-medium">
+                              📷 {photoCount} Foto
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-full h-24 rounded-lg mb-3 bg-slate-50 border border-slate-100 flex items-center justify-center text-xs text-slate-400">
+                          Belum ada foto
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-start">
+                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                          }`}>
+                          {item.category === 'motorcycle' ? 'Motor' : 'Mobil'}
+                        </span>
+                        <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-700">
+                          {item.plate_number}
+                        </span>
+                      </div>
+
+                      <h3 className="text-lg font-bold text-slate-900 mt-2">
+                        {item.brand} {item.model} ({item.year})
+                      </h3>
+                      <p className="text-sm text-slate-500 capitalize">
+                        Transmisi: {item.transmission} {item.with_driver ? '• Tersedia Supir' : '• Lepas Kunci'}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+                      <div>
+                        <span className="text-slate-500">Tarif: </span>
+                        <span className="font-bold text-slate-900">
+                          Rp {item.daily_rate.toLocaleString('id-ID')}/hari
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-500">
+                        Deposit: Rp {item.deposit_amount.toLocaleString('id-ID')}
                       </span>
                     </div>
-                    <span className="text-xs text-slate-500">
-                      Deposit: Rp {item.deposit_amount.toLocaleString('id-ID')}
-                    </span>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
