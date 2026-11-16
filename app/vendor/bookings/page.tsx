@@ -104,93 +104,123 @@ export default function VendorBookingsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-            <div className="max-w-5xl mx-auto space-y-6">
-                <div>
-                    <Link href="/vendor/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
-                        ← Kembali ke Dashboard
-                    </Link>
-                    <h1 className="text-2xl font-bold text-slate-900 mt-1">Pesanan Masuk & Serah Terima</h1>
+        <div className="min-h-screen bg-[#F0F4F9] p-4 md:p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+                
+                {/* Top Header Bar */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/vendor/dashboard"
+                            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-[#0F52BA] hover:text-white flex items-center justify-center text-slate-700 transition"
+                            title="Kembali ke Dashboard"
+                        >
+                            ←
+                        </Link>
+                        <div>
+                            <span className="text-[10px] uppercase font-bold text-[#0F52BA] tracking-wider">
+                                Vendor Console
+                            </span>
+                            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
+                                Pesanan Masuk & Serah Terima
+                            </h1>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/vendor/armada"
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition"
+                        >
+                            🚘 Kelola Armada
+                        </Link>
+                        <Link
+                            href="/dashboard"
+                            className="px-4 py-2 bg-[#0F52BA] hover:bg-[#1E3A8A] text-white font-semibold rounded-xl text-xs transition shadow-sm"
+                        >
+                            🏪 Marketplace
+                        </Link>
+                    </div>
                 </div>
 
                 {loading ? (
-                    <p className="text-center text-slate-500 py-10">Memuat pesanan masuk...</p>
+                    <p className="text-center text-slate-500 py-12 font-medium">Memuat pesanan masuk...</p>
                 ) : bookings.length === 0 ? (
-                    <div className="bg-white p-10 rounded-xl border border-slate-200 text-center text-slate-500">
-                        Belum ada pesanan masuk untuk armada Anda.
+                    <div className="bg-white p-12 rounded-2xl border border-slate-200/80 text-center text-slate-500 text-sm shadow-sm">
+                        Belum ada pesanan masuk untuk armada Anda saat ini.
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {bookings.map((item) => (
-                            <div key={item.id} className="bg-white p-6 rounded-xl border border-slate-200 space-y-4">
+                            <div key={item.id} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5 hover:shadow-md transition">
                                 {/* Baris Atas: Unit & Status */}
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${item.service_type === 'self_drive'
+                                            <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full ${item.service_type === 'self_drive'
                                                     ? 'bg-purple-100 text-purple-800'
                                                     : 'bg-sky-100 text-sky-800'
                                                 }`}>
                                                 {item.service_type === 'self_drive' ? 'Lepas Kunci' : 'Dengan Supir'}
                                             </span>
-                                            <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
+                                            <span className="text-xs font-mono bg-slate-100 px-2.5 py-0.5 rounded text-slate-700 font-bold">
                                                 {item.vehicles?.plate_number}
                                             </span>
                                         </div>
-                                        <h2 className="text-lg font-bold text-slate-900 mt-1.5">
+                                        <h2 className="text-lg font-black text-slate-900 mt-2">
                                             {item.vehicles?.brand} {item.vehicles?.model}
                                         </h2>
                                     </div>
 
-                                    <div className="text-right">
-                                        <p className="text-xs text-slate-500">Pendapatan Sewa</p>
-                                        <p className="text-base font-bold text-emerald-600">
+                                    <div className="md:text-right">
+                                        <p className="text-xs text-slate-400 font-semibold uppercase">Pendapatan Sewa</p>
+                                        <p className="text-lg font-black text-emerald-600">
                                             Rp {item.base_price.toLocaleString('id-ID')}
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Baris Tengah: Info Penyewa & Jadwal */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-slate-50/60 p-4 rounded-xl border border-slate-100">
                                     <div>
-                                        <p className="text-slate-500">Penyewa</p>
-                                        <p className="font-semibold text-slate-900">{item.profiles?.full_name}</p>
-                                        <p className="text-xs text-slate-600">WA: {item.profiles?.phone || '-'}</p>
+                                        <p className="text-xs text-slate-400 font-semibold uppercase">Penyewa</p>
+                                        <p className="font-bold text-slate-900 mt-0.5">{item.profiles?.full_name}</p>
+                                        <p className="text-xs text-slate-600 mt-0.5">WA: {item.profiles?.phone || '-'}</p>
                                     </div>
 
                                     <div>
-                                        <p className="text-slate-500">Periode Sewa ({item.total_days} Hari)</p>
-                                        <p className="font-medium text-slate-900">
+                                        <p className="text-xs text-slate-400 font-semibold uppercase">Periode ({item.total_days} Hari)</p>
+                                        <p className="font-bold text-slate-900 mt-0.5">
                                             {item.start_date} s/d {item.end_date}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <p className="text-slate-500">
-                                            {item.service_type === 'self_drive' ? 'Jaminan Deposit' : 'Titik Penjemputan'}
+                                        <p className="text-xs text-slate-400 font-semibold uppercase">
+                                            {item.service_type === 'self_drive' ? 'Uang Deposit' : 'Titik Jemput'}
                                         </p>
-                                        <p className="font-medium text-slate-900">
+                                        <p className="font-bold text-slate-900 mt-0.5">
                                             {item.service_type === 'self_drive'
-                                                ? `Rp ${item.deposit_amount.toLocaleString('id-ID')} (Tahan s/d Kembali)`
+                                                ? `Rp ${item.deposit_amount.toLocaleString('id-ID')} (Jaminan)`
                                                 : item.pickup_location}
                                         </p>
                                     </div>
                                 </div>
 
-                                {/* Baris Bawah: Tombol Aksi Serah Terima Sesuai Jenis Layanan */}
-                                <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4">
-                                    <div className="text-xs text-slate-500">
+                                {/* Baris Bawah: Tombol Aksi */}
+                                <div className="pt-2 flex flex-wrap items-center justify-between gap-4">
+                                    <div className="text-xs text-slate-500 font-medium">
                                         {item.status === 'confirmed' && (
                                             item.service_type === 'self_drive'
-                                                ? 'Instruksi: Periksa KTP & SIM asli penyewa sebelum menyerahkan kunci.'
-                                                : 'Instruksi: Tugaskan supir menuju titik penjemputan pelanggan.'
+                                                ? '⚠️ Instruksi: Periksa KTP & SIM asli penyewa sebelum menyerahkan kunci.'
+                                                : '🚗 Instruksi: Tugaskan supir menuju titik penjemputan pelanggan.'
                                         )}
                                         {item.status === 'in_use' && (
                                             item.service_type === 'self_drive'
-                                                ? 'Unit sedang dipakai. Periksa kondisi bodi & bensin saat pengembalian.'
-                                                : 'Perjalanan dengan supir sedang berlangsung.'
+                                                ? '⏱️ Unit sedang dipakai. Periksa kondisi bodi & bensin saat kembali.'
+                                                : '⏱️ Perjalanan dengan supir sedang berlangsung.'
                                         )}
-                                        {item.status === 'completed' && 'Transaksi selesai dan unit telah kembali.'}
+                                        {item.status === 'completed' && '✅ Transaksi selesai dan unit telah kembali ke garasi.'}
                                     </div>
 
                                     <div>
@@ -198,11 +228,11 @@ export default function VendorBookingsPage() {
                                             <button
                                                 disabled={updatingId === item.id}
                                                 onClick={() => handleUpdateStatus(item.id, 'in_use')}
-                                                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                                                className="px-5 py-2.5 bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] hover:from-[#1E3A8A] hover:to-[#172554] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition"
                                             >
                                                 {item.service_type === 'self_drive'
-                                                    ? 'Konfirmasi Serah Kunci (Mulai Sewa)'
-                                                    : 'Konfirmasi Supir Jemput (Mulai Trip)'}
+                                                    ? 'Serah Kunci (Mulai Sewa)'
+                                                    : 'Supir Jemput (Mulai Trip)'}
                                             </button>
                                         )}
 
@@ -210,16 +240,16 @@ export default function VendorBookingsPage() {
                                             <button
                                                 disabled={updatingId === item.id}
                                                 onClick={() => handleUpdateStatus(item.id, 'completed')}
-                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                                                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 disabled:opacity-50 transition"
                                             >
                                                 {item.service_type === 'self_drive'
-                                                    ? 'Unit Kembali & Kembalikan Deposit (Selesai)'
+                                                    ? 'Unit Kembali & Kembalikan Deposit'
                                                     : 'Konfirmasi Trip Selesai'}
                                             </button>
                                         )}
 
                                         {item.status === 'completed' && (
-                                            <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg">
+                                            <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl">
                                                 ✓ Selesai
                                             </span>
                                         )}
@@ -231,5 +261,6 @@ export default function VendorBookingsPage() {
                 )}
             </div>
         </div>
+    )
     )
 }

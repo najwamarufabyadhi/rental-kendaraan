@@ -171,58 +171,66 @@ function VehicleBookingContent() {
     } catch (err: any) {
       alert('Terjadi kesalahan: ' + (err?.message || 'Gagal memproses pesanan'))
     } finally {
-      // Pastikan status tombol loading dinonaktifkan kembali
       setSubmitting(false)
     }
   }
 
   if (loading || !vehicle) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <p className="text-slate-500">Memuat rincian kendaraan...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F0F4F9] text-slate-500">
+        <div className="w-8 h-8 border-4 border-[#0F52BA] border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-sm font-medium">Memuat rincian kendaraan...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <Link href="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
-          ← Kembali ke Katalog
-        </Link>
+    <div className="min-h-screen bg-[#F0F4F9] text-slate-800 p-6 md:p-10">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0F52BA] hover:underline"
+          >
+            ← Kembali ke Katalog Armada
+          </Link>
+          <span className="text-xs font-bold text-slate-400">DETAIL UNIT & RESERVASI</span>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Kolom Kiri: Info Kendaraan & Vendor */}
-          <div className="md:col-span-2 bg-white p-6 rounded-xl border border-slate-200 space-y-4">
-            
+          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
             {/* Galeri Foto Kendaraan */}
             {galleryImages.length > 0 ? (
-              <div className="space-y-2">
-                <div className="relative w-full h-64 md:h-80 rounded-xl overflow-hidden bg-slate-100">
+              <div className="space-y-3">
+                <div className="relative w-full h-64 md:h-96 rounded-2xl overflow-hidden bg-slate-100">
                   <img
                     src={activePhoto}
                     alt={`${vehicle.brand} ${vehicle.model}`}
                     className="w-full h-full object-cover"
                   />
                   {galleryImages.length > 1 && (
-                    <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md text-xs bg-slate-900/80 text-white font-medium backdrop-blur-sm">
-                      Foto {selectedPhotoIndex + 1} dari {galleryImages.length}
+                    <span className="absolute bottom-3 right-3 px-3 py-1 rounded-lg text-xs bg-slate-900/80 text-white font-bold backdrop-blur-sm">
+                      📷 Foto {selectedPhotoIndex + 1} / {galleryImages.length}
                     </span>
                   )}
+                  <span className="absolute top-3 left-3 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-white/90 backdrop-blur-sm text-[#0F52BA] shadow-sm">
+                    {vehicle.category === 'motorcycle' ? 'Motor' : 'Mobil'} • {vehicle.transmission}
+                  </span>
                 </div>
 
                 {/* Thumbnail Galeri untuk navigasi foto */}
                 {galleryImages.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1 pt-1">
+                  <div className="flex gap-2.5 overflow-x-auto pb-1 pt-1">
                     {galleryImages.map((imgUrl, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => setSelectedPhotoIndex(idx)}
-                        className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                        className={`relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition ${
                           selectedPhotoIndex === idx
-                            ? 'border-emerald-600 ring-2 ring-emerald-200'
-                            : 'border-slate-200 opacity-70 hover:opacity-100'
+                            ? 'border-[#0F52BA] ring-2 ring-blue-200 scale-95'
+                            : 'border-slate-200 opacity-60 hover:opacity-100'
                         }`}
                       >
                         <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
@@ -232,100 +240,105 @@ function VehicleBookingContent() {
                 )}
               </div>
             ) : (
-              <div className="w-full h-48 rounded-xl bg-slate-100 flex items-center justify-center text-sm text-slate-400">
+              <div className="w-full h-56 rounded-2xl bg-slate-100 flex items-center justify-center text-sm text-slate-400 font-medium">
                 Tidak ada foto tersedia untuk kendaraan ini
               </div>
             )}
 
-            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full uppercase inline-block">
-              {vehicle.category === 'motorcycle' ? 'Sepeda Motor' : 'Mobil'} • {vehicle.transmission}
-            </span>
-
-            <h1 className="text-2xl font-bold text-slate-900">
-              {vehicle.brand} {vehicle.model} ({vehicle.year})
-            </h1>
-
-            <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 text-sm space-y-1">
-              <p className="font-semibold text-slate-900">{vehicle.vendors.business_name}</p>
-              <p className="text-slate-600">Kota: {vehicle.vendors.city}</p>
-              <p className="text-slate-600">Alamat Garasi: {vehicle.vendors.address}</p>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900">
+                {vehicle.brand} {vehicle.model} ({vehicle.year})
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Nomor Plat: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{vehicle.plate_number}</span>
+              </p>
             </div>
 
-            <form onSubmit={handleBooking} className="space-y-4 pt-2">
-              {/* Pilihan Layanan: Lepas Kunci vs Dengan Supir (Khusus Mobil yang mendukung supir) */}
+            {/* Profil Vendor Garasi */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏢</span>
+                <span className="font-bold text-slate-900 text-sm">{vehicle.vendors.business_name}</span>
+              </div>
+              <p className="text-slate-600 pl-6">📍 Wilayah Operasi: <strong className="text-slate-800">{vehicle.vendors.city}</strong></p>
+              <p className="text-slate-600 pl-6">🏠 Alamat Garasi: {vehicle.vendors.address}</p>
+            </div>
+
+            <form onSubmit={handleBooking} className="space-y-5 pt-2">
+              {/* Pilihan Layanan: Lepas Kunci vs Dengan Supir */}
               {vehicle.category === 'car' && vehicle.with_driver && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Pilih Jenis Layanan
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                    Pilih Jenis Layanan Sewa
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setServiceType('self_drive')}
-                      className={`p-3 rounded-lg border text-sm font-medium text-left ${
+                      className={`p-4 rounded-xl border text-left transition ${
                         serviceType === 'self_drive'
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 text-slate-700'
+                          ? 'border-[#0F52BA] bg-blue-50/50 text-[#0F52BA] ring-2 ring-blue-500/20'
+                          : 'border-slate-200 text-slate-700 hover:border-slate-300'
                       }`}
                     >
-                      <div>Lepas Kunci</div>
-                      <div className="text-xs opacity-75 font-normal">Wajib SIM A & Deposit</div>
+                      <div className="font-bold text-sm">🔑 Lepas Kunci</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">Wajib SIM A & Deposit</div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setServiceType('with_driver')}
-                      className={`p-3 rounded-lg border text-sm font-medium text-left ${
+                      className={`p-4 rounded-xl border text-left transition ${
                         serviceType === 'with_driver'
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 text-slate-700'
+                          ? 'border-[#0F52BA] bg-blue-50/50 text-[#0F52BA] ring-2 ring-blue-500/20'
+                          : 'border-slate-200 text-slate-700 hover:border-slate-300'
                       }`}
                     >
-                      <div>Dengan Supir</div>
-                      <div className="text-xs opacity-75 font-normal">Bebas Deposit (Rp 0)</div>
+                      <div className="font-bold text-sm">👨‍✈️ Dengan Supir</div>
+                      <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">Bebas Deposit (Rp 0)</div>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Input Tanggal Mulai & Selesai */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Tanggal Sewa */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Mulai</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tanggal Mulai Sewa</label>
                   <input
                     type="date"
                     required
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal Selesai</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tanggal Selesai Sewa</label>
                   <input
                     type="date"
                     required
                     value={endDate}
                     min={startDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                   />
                 </div>
               </div>
 
-              {/* Lokasi Penjemputan (Jika memilih Dengan Supir) */}
+              {/* Titik Jemput */}
               {serviceType === 'with_driver' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Alamat Penjemputan
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Titik / Alamat Penjemputan Supir
                   </label>
                   <input
                     type="text"
                     required
                     value={pickupLocation}
                     onChange={(e) => setPickupLocation(e.target.value)}
-                    placeholder="Contoh: Stasiun Malang Kota Baru / Hotel..."
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900"
+                    placeholder="Contoh: Stasiun Malang Kota Baru / Lobi Hotel Savana..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0F52BA]"
                   />
                 </div>
               )}
@@ -333,48 +346,50 @@ function VehicleBookingContent() {
               <button
                 type="submit"
                 disabled={submitting || totalDays <= 0}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg disabled:opacity-50"
+                className="w-full py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-500/25 transition transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
               >
-                {submitting ? 'Memeriksa Jadwal...' : 'Konfirmasi Sewa Sekarang'}
+                {submitting ? 'Memeriksa Jadwal & Memproses...' : 'Konfirmasi & Pesan Unit Sekarang'}
               </button>
             </form>
           </div>
 
-          {/* Kolom Kanan: Ringkasan Biaya Otomatis */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 h-fit space-y-4">
-            <h2 className="font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Rincian Biaya
+          {/* Kolom Kanan: Ringkasan Biaya */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-fit space-y-4">
+            <h2 className="font-black text-slate-900 border-b border-slate-100 pb-3 text-base">
+              Rincian Perhitungan Biaya
             </h2>
 
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Tarif Harian</span>
-                <span>Rp {vehicle.daily_rate.toLocaleString('id-ID')}</span>
+                <span className="font-semibold text-slate-800">Rp {vehicle.daily_rate.toLocaleString('id-ID')}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Durasi Sewa</span>
-                <span>{totalDays} Hari</span>
+                <span className="font-bold text-[#0F52BA]">{totalDays} Hari</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Subtotal Sewa</span>
-                <span>Rp {basePrice.toLocaleString('id-ID')}</span>
+                <span>Subtotal Sewa Unit</span>
+                <span className="font-semibold text-slate-800">Rp {basePrice.toLocaleString('id-ID')}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Uang Jaminan (Deposit)</span>
-                <span>Rp {activeDeposit.toLocaleString('id-ID')}</span>
+                <span>Deposit Jaminan {serviceType === 'with_driver' ? '(Bebas Deposit)' : ''}</span>
+                <span className="font-semibold text-slate-800">Rp {activeDeposit.toLocaleString('id-ID')}</span>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-              <span className="font-bold text-slate-900">Total Bayar</span>
-              <span className="text-lg font-bold text-emerald-600">
-                Rp {grandTotal.toLocaleString('id-ID')}
-              </span>
+            <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Pembayaran</p>
+                <p className="text-xl font-black text-slate-900">
+                  Rp {grandTotal.toLocaleString('id-ID')}
+                </p>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-400">
-              *Deposit dikembalikan 100% saat pengembalian unit dalam kondisi baik.
-            </p>
+            <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-[11px] text-blue-800 leading-relaxed">
+              💡 <strong>Catatan Deposit:</strong> Uang jaminan (deposit) akan langsung dikembalikan 100% setelah unit kembali dalam kondisi baik.
+            </div>
           </div>
         </div>
       </div>
@@ -386,8 +401,9 @@ export default function VehicleBookingPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-slate-50">
-          <p className="text-slate-500">Memuat rincian kendaraan...</p>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F0F4F9] text-slate-500">
+          <div className="w-8 h-8 border-4 border-[#0F52BA] border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className="text-sm font-medium">Memuat rincian kendaraan...</p>
         </div>
       }
     >

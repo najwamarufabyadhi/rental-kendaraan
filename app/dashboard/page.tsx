@@ -101,24 +101,30 @@ export default function CustomerDashboard() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Navbar Atas */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">RentalHub Marketplace</h1>
-            <p className="text-xs text-slate-500">Temukan motor & mobil dari mitra terpercaya</p>
+    <div className="min-h-screen bg-[#F0F4F9] text-slate-800">
+      {/* Top Bar Navigation */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0F52BA] to-[#2563EB] flex items-center justify-center text-white font-black text-xl shadow-md shadow-blue-500/20">
+              R
+            </div>
+            <div>
+              <h1 className="text-lg font-black text-[#0F52BA] tracking-wider uppercase">RENTALHUB</h1>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest -mt-1">Katalog Rental Multi-Vendor</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-3">
             <Link
               href="/dashboard/bookings"
-              className="text-sm font-medium text-slate-700 hover:text-slate-900"
+              className="px-4 py-2 text-sm font-semibold text-slate-700 hover:text-[#0F52BA] bg-slate-50 hover:bg-blue-50 rounded-xl transition border border-slate-200"
             >
-              Pesanan Saya
+              📋 Pesanan Saya
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm bg-red-50 text-red-600 font-medium rounded-lg hover:bg-red-100"
+              className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition"
             >
               Keluar
             </button>
@@ -126,58 +132,71 @@ export default function CustomerDashboard() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Bar Pencarian & Filter */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 justify-between items-center">
-          {/* Tombol Filter Kategori */}
+      <main className="max-w-7xl mx-auto p-6 md:p-8 space-y-6">
+        {/* Search & Filter Header Card */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+          {/* Category Filter Pills */}
           <div className="flex gap-2 w-full md:w-auto">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedCategory === 'all'
-                  ? 'bg-slate-900 text-white'
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition ${
+                selectedCategory === 'all'
+                  ? 'bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+              }`}
             >
-              Semua Unit
+              Semua Armada
             </button>
             <button
               onClick={() => setSelectedCategory('motorcycle')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedCategory === 'motorcycle'
-                  ? 'bg-slate-900 text-white'
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition ${
+                selectedCategory === 'motorcycle'
+                  ? 'bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+              }`}
             >
-              Motor
+              🏍️ Motor
             </button>
             <button
               onClick={() => setSelectedCategory('car')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedCategory === 'car'
-                  ? 'bg-slate-900 text-white'
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition ${
+                selectedCategory === 'car'
+                  ? 'bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] text-white shadow-md shadow-blue-500/20'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+              }`}
             >
-              Mobil
+              🚗 Mobil
             </button>
           </div>
 
-          {/* Input Pencarian Kota */}
-          <div className="w-full md:w-72">
+          {/* City Search Bar */}
+          <div className="w-full md:w-80 relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              🔍
+            </span>
             <input
               type="text"
               value={cityQuery}
               onChange={(e) => setCityQuery(e.target.value)}
               placeholder="Cari berdasarkan kota (misal: Malang)..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0F52BA] focus:border-transparent transition"
             />
           </div>
         </div>
 
-        {/* Grid Katalog Kendaraan */}
+        {/* Fleet Grid */}
         {loading ? (
-          <p className="text-center text-slate-500 py-12">Memuat daftar kendaraan...</p>
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <div className="w-8 h-8 border-4 border-[#0F52BA] border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-sm font-medium">Memuat katalog kendaraan...</p>
+          </div>
         ) : filteredVehicles.length === 0 ? (
-          <div className="bg-white p-12 rounded-xl border border-slate-200 text-center text-slate-500">
-            Tidak ada kendaraan yang sesuai dengan filter pencarian Anda.
+          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-2 shadow-sm">
+            <p className="text-3xl">🔍</p>
+            <h3 className="text-base font-bold text-slate-800">Tidak ada unit ditemukan</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Tidak ada kendaraan yang sesuai dengan filter atau kota pencarian Anda saat ini. Coba pilih kategori lain atau reset kata kunci.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -190,83 +209,79 @@ export default function CustomerDashboard() {
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between hover:shadow-md transition"
+                  className="bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between hover:shadow-lg transition-all transform hover:-translate-y-0.5 group"
                 >
                   <div>
                     {primaryImg ? (
-                      <div className="relative w-full h-44 rounded-lg mb-3 overflow-hidden bg-slate-100">
+                      <div className="relative w-full h-48 rounded-xl mb-4 overflow-hidden bg-slate-100">
                         <img
                           src={primaryImg}
                           alt={`${item.brand} ${item.model}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         />
                         {photoCount > 1 && (
-                          <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[11px] bg-slate-900/75 text-white font-medium">
+                          <span className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg text-[11px] bg-slate-900/80 backdrop-blur-sm text-white font-bold">
                             📷 {photoCount} Foto
                           </span>
                         )}
+                        <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-white/90 backdrop-blur-sm text-slate-800 shadow-sm">
+                          {item.category === 'motorcycle' ? 'Motor' : 'Mobil'}
+                        </span>
                       </div>
                     ) : (
-                      <div className="w-full h-44 rounded-lg mb-3 bg-slate-100 flex items-center justify-center text-xs text-slate-400">
-                        Tidak ada foto
+                      <div className="w-full h-48 rounded-xl mb-4 bg-slate-100 flex items-center justify-center text-xs text-slate-400 font-medium">
+                        Foto tidak tersedia
                       </div>
                     )}
 
-                    <div className="flex justify-between items-center">
-                    <span
-                      className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
-                        }`}
+                    <div className="flex justify-between items-center text-xs text-slate-500">
+                      <span className="font-semibold text-slate-600">
+                        Tahun {item.year} • <span className="capitalize">{item.transmission}</span>
+                      </span>
+                      <span className="font-bold text-[#0F52BA] bg-blue-50 px-2 py-0.5 rounded-md">
+                        📍 {item.vendors?.city}
+                      </span>
+                    </div>
+
+                    <h2 className="text-lg font-black text-slate-900 mt-2 line-clamp-1">
+                      {item.brand} {item.model}
+                    </h2>
+
+                    {/* Info Layanan & Vendor */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 space-y-1">
+                      <p className="flex justify-between">
+                        <span className="text-slate-400">Pilihan Layanan:</span>
+                        <strong className="text-slate-800">
+                          {item.with_driver ? 'Lepas Kunci / Supir' : 'Lepas Kunci'}
+                        </strong>
+                      </p>
+                      <p className="flex justify-between">
+                        <span className="text-slate-400">Mitra Rental:</span>
+                        <span className="font-bold text-slate-700">{item.vendors?.business_name}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tarif & CTA Button */}
+                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tarif Sewa</p>
+                      <p className="text-lg font-black text-slate-900">
+                        Rp {item.daily_rate.toLocaleString('id-ID')}
+                        <span className="text-xs font-normal text-slate-500">/hari</span>
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/vehicles/${item.id}`}
+                      className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs font-bold rounded-xl shadow-md shadow-red-500/20 transition transform active:scale-95"
                     >
-                      {item.category === 'motorcycle' ? 'Motor' : 'Mobil'}
-                    </span>
-                    <span className="text-xs font-medium text-slate-500">
-                      📍 {item.vendors?.city}
-                    </span>
-                  </div>
-
-                  <h2 className="text-lg font-bold text-slate-900 mt-3">
-                    {item.brand} {item.model}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Tahun {item.year} • <span className="capitalize">{item.transmission}</span>
-                  </p>
-
-                  {/* Info Layanan & Vendor */}
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 space-y-1">
-                    <p>
-                      Layanan:{' '}
-                      <strong className="text-slate-800">
-                        {item.with_driver ? 'Lepas Kunci / Dengan Supir' : 'Lepas Kunci'}
-                      </strong>
-                    </p>
-                    <p>
-                      Mitra: <span className="font-medium text-slate-800">{item.vendors?.business_name}</span>
-                    </p>
+                      Pilih Unit
+                    </Link>
                   </div>
                 </div>
-
-                {/* Harga & Tombol Sewa */}
-                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-400">Mulai dari</p>
-                    <p className="text-base font-bold text-emerald-600">
-                      Rp {item.daily_rate.toLocaleString('id-ID')}
-                      <span className="text-xs font-normal text-slate-500">/hari</span>
-                    </p>
-                  </div>
-
-                  <Link
-                    href={`/vehicles/${item.id}`}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg"
-                  >
-                    Pilih Unit
-                  </Link>
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
           </div>
         )}
       </main>
