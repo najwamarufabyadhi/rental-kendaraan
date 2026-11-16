@@ -283,22 +283,20 @@ export default function VendorArmadaPage() {
                     setCategory('motorcycle')
                     setWithDriver(false)
                   }}
-                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${
-                    category === 'motorcycle'
+                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${category === 'motorcycle'
                       ? 'border-[#0F52BA] bg-[#0F52BA] text-white shadow-md shadow-blue-500/20'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   🏍️ Sepeda Motor
                 </button>
                 <button
                   type="button"
                   onClick={() => setCategory('car')}
-                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${
-                    category === 'car'
+                  className={`p-3 rounded-xl border text-sm font-bold transition-all ${category === 'car'
                       ? 'border-[#0F52BA] bg-[#0F52BA] text-white shadow-md shadow-blue-500/20'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   🚗 Mobil
                 </button>
@@ -514,11 +512,10 @@ export default function VendorArmadaPage() {
                       )}
 
                       <div className="flex justify-between items-start">
-                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                          item.category === 'motorcycle'
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${item.category === 'motorcycle'
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-blue-100 text-[#0F52BA]'
-                        }`}>
+                          }`}>
                           {item.category === 'motorcycle' ? '🏍️ Motor' : '🚗 Mobil'}
                         </span>
                         <span className="text-xs font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-bold">
@@ -559,5 +556,5 @@ export default function VendorArmadaPage() {
       </div>
     </div>
   )
-  )
+
 }

@@ -106,7 +106,7 @@ export default function VendorBookingsPage() {
     return (
         <div className="min-h-screen bg-[#F0F4F9] p-4 md:p-8">
             <div className="max-w-6xl mx-auto space-y-6">
-                
+
                 {/* Top Header Bar */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-center gap-3">
@@ -158,8 +158,8 @@ export default function VendorBookingsPage() {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[11px] font-bold px-3 py-0.5 rounded-full ${item.service_type === 'self_drive'
-                                                    ? 'bg-purple-100 text-purple-800'
-                                                    : 'bg-sky-100 text-sky-800'
+                                                ? 'bg-purple-100 text-purple-800'
+                                                : 'bg-sky-100 text-sky-800'
                                                 }`}>
                                                 {item.service_type === 'self_drive' ? 'Lepas Kunci' : 'Dengan Supir'}
                                             </span>
@@ -262,5 +262,5 @@ export default function VendorBookingsPage() {
             </div>
         </div>
     )
-    )
+
 }

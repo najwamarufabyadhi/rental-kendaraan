@@ -132,7 +132,7 @@ export default function VendorDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F9] flex flex-col md:flex-row">
-      
+
       {/* SIDEBAR NAVIGASI BIRU TUA (Sesuai Desain di Gambar) */}
       <aside className="w-full md:w-64 bg-gradient-to-b from-[#0F52BA] via-[#1E40AF] to-[#1E3A8A] text-white flex flex-col justify-between p-5 md:p-6 shadow-xl shrink-0">
         <div>
@@ -210,7 +210,7 @@ export default function VendorDashboard() {
 
       {/* KONTEN UTAMA */}
       <main className="flex-1 p-6 md:p-8 space-y-6 overflow-y-auto">
-        
+
         {/* Top Header Bar */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -423,5 +423,5 @@ export default function VendorDashboard() {
       </main>
     </div>
   )
-  )
+
 }
