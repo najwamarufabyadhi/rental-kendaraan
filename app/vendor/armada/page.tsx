@@ -62,6 +62,9 @@ export default function VendorArmadaPage() {
   const [editDepositAmount, setEditDepositAmount] = useState('0')
   const [editWithDriver, setEditWithDriver] = useState(false)
   const [editIsActive, setEditIsActive] = useState(true)
+  const [editExistingImages, setEditExistingImages] = useState<VehicleImage[]>([])
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([])
+  const [editNewPreviews, setEditNewPreviews] = useState<string[]>([])
   const [editUpdating, setEditUpdating] = useState(false)
 
   // 1. Ambil ID Vendor dan daftar kendaraan miliknya saat halaman dibuka
@@ -111,7 +114,7 @@ export default function VendorArmadaPage() {
     initData()
   }, [router, supabase])
 
-  // Handler memilih banyak file foto
+  // Handler memilih banyak file foto untuk form tambah
   const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selected = Array.from(e.target.files)
@@ -121,12 +124,30 @@ export default function VendorArmadaPage() {
     }
   }
 
-  // Handler menghapus satu foto dari daftar preview sebelum diunggah
+  // Handler menghapus satu foto dari preview tambah armada
   const handleRemoveFile = (index: number) => {
     const updatedFiles = imageFiles.filter((_, i) => i !== index)
     const updatedPreviews = imagePreviews.filter((_, i) => i !== index)
     setImageFiles(updatedFiles)
     setImagePreviews(updatedPreviews)
+  }
+
+  // Handler memilih foto baru saat di Modal Edit Unit
+  const handleSelectEditFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selected = Array.from(e.target.files)
+      setEditNewFiles([...editNewFiles, ...selected])
+      const previews = selected.map((file) => URL.createObjectURL(file))
+      setEditNewPreviews([...editNewPreviews, ...previews])
+    }
+  }
+
+  // Handler membatalkan foto baru yang belum disimpan saat edit
+  const handleRemoveEditNewFile = (index: number) => {
+    const updatedFiles = editNewFiles.filter((_, i) => i !== index)
+    const updatedPreviews = editNewPreviews.filter((_, i) => i !== index)
+    setEditNewFiles(updatedFiles)
+    setEditNewPreviews(updatedPreviews)
   }
 
   // 2. Fungsi menyimpan unit baru ke tabel 'vehicles' dan 'vehicle_images'
@@ -241,15 +262,161 @@ export default function VendorArmadaPage() {
     setEditDepositAmount(String(v.deposit_amount))
     setEditWithDriver(v.with_driver)
     setEditIsActive(v.is_active)
+    setEditExistingImages(v.vehicle_images || [])
+    setEditNewFiles([])
+    setEditNewPreviews([])
   }
 
-  // 4. Menyimpan Hasil Perubahan Edit Unit
+  // 4. Mengatur Foto Sampul Utama dari Foto yang Sudah Ada
+  const handleSetPrimaryPhoto = async (imageId: string, imageUrl: string) => {
+    if (!editingVehicle) return
+    try {
+      // 1. Set semua foto kendaraan ini menjadi is_primary = false
+      await supabase
+        .from('vehicle_images')
+        .update({ is_primary: false })
+        .eq('vehicle_id', editingVehicle.id)
+
+      // 2. Set foto yang dipilih menjadi is_primary = true
+      await supabase
+        .from('vehicle_images')
+        .update({ is_primary: true })
+        .eq('id', imageId)
+
+      // 3. Update juga image_url utama di tabel vehicles
+      await supabase
+        .from('vehicles')
+        .update({ image_url: imageUrl })
+        .eq('id', editingVehicle.id)
+
+      const updated = editExistingImages.map((img) => ({
+        ...img,
+        is_primary: img.id === imageId,
+      }))
+      setEditExistingImages(updated)
+
+      // Update state lokal vehicles
+      setVehicles(
+        vehicles.map((v) => {
+          if (v.id === editingVehicle.id) {
+            return {
+              ...v,
+              image_url: imageUrl,
+              vehicle_images: updated,
+            }
+          }
+          return v
+        })
+      )
+    } catch (err: any) {
+      alert('Gagal mengatur foto sampul: ' + (err?.message || 'Terjadi kesalahan'))
+    }
+  }
+
+  // 5. Menghapus Satu Foto dari Galeri yang Sudah Ada
+  const handleDeleteExistingPhoto = async (imageId: string) => {
+    if (!editingVehicle) return
+    if (!confirm('Apakah Anda yakin ingin menghapus foto ini dari galeri?')) return
+
+    try {
+      const { error } = await supabase
+        .from('vehicle_images')
+        .delete()
+        .eq('id', imageId)
+
+      if (error) throw error
+
+      const updatedImages = editExistingImages.filter((img) => img.id !== imageId)
+      setEditExistingImages(updatedImages)
+
+      // Jika foto yang dihapus adalah foto utama, jadikan foto pertama yang tersisa sebagai sampul
+      const nextPrimary = updatedImages.find((img) => img.is_primary)?.image_url || updatedImages[0]?.image_url || null
+
+      await supabase
+        .from('vehicles')
+        .update({ image_url: nextPrimary })
+        .eq('id', editingVehicle.id)
+
+      setVehicles(
+        vehicles.map((v) => {
+          if (v.id === editingVehicle.id) {
+            return {
+              ...v,
+              image_url: nextPrimary,
+              vehicle_images: updatedImages,
+            }
+          }
+          return v
+        })
+      )
+    } catch (err: any) {
+      alert('Gagal menghapus foto: ' + (err?.message || 'Terjadi kesalahan'))
+    }
+  }
+
+  // 6. Menyimpan Hasil Perubahan Edit Unit & Mengunggah Foto Baru
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingVehicle) return
+    if (!editingVehicle || !vendorId) return
     setEditUpdating(true)
 
     try {
+      let newlyUploadedImages: VehicleImage[] = []
+
+      // A. Jika ada foto baru yang dipilih, unggah ke storage 'vehicle-images'
+      if (editNewFiles.length > 0) {
+        const uploadedUrls: string[] = []
+
+        for (let i = 0; i < editNewFiles.length; i++) {
+          const file = editNewFiles[i]
+          const fileExt = file.name.split('.').pop()
+          const fileName = `${vendorId}-${Date.now()}-new-${i}.${fileExt}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('vehicle-images')
+            .upload(fileName, file)
+
+          if (uploadError) {
+            throw new Error('Gagal mengunggah foto baru: ' + uploadError.message)
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from('vehicle-images')
+            .getPublicUrl(fileName)
+
+          uploadedUrls.push(publicUrlData.publicUrl)
+        }
+
+        // Cek apakah sudah ada foto utama di galeri yang ada
+        const hasExistingPrimary = editExistingImages.some((img) => img.is_primary)
+
+        const imageRecords = uploadedUrls.map((url, idx) => ({
+          vehicle_id: editingVehicle.id,
+          image_url: url,
+          is_primary: !hasExistingPrimary && idx === 0,
+          sort_order: editExistingImages.length + idx,
+        }))
+
+        const { data: insertedImages, error: imgError } = await supabase
+          .from('vehicle_images')
+          .insert(imageRecords)
+          .select()
+
+        if (imgError) throw imgError
+        if (insertedImages) {
+          newlyUploadedImages = insertedImages as VehicleImage[]
+        }
+      }
+
+      // Gabungkan foto lama dan foto baru
+      const combinedImages = [...editExistingImages, ...newlyUploadedImages]
+      const currentPrimaryUrl =
+        combinedImages.find((img) => img.is_primary)?.image_url ||
+        combinedImages[0]?.image_url ||
+        editingVehicle.image_url ||
+        null
+
+      // B. Update data kendaraan di tabel 'vehicles'
       const { error } = await supabase
         .from('vehicles')
         .update({
@@ -262,6 +429,7 @@ export default function VendorArmadaPage() {
           deposit_amount: Number(editDepositAmount),
           with_driver: editingVehicle.category === 'car' ? editWithDriver : false,
           is_active: editIsActive,
+          image_url: currentPrimaryUrl,
         })
         .eq('id', editingVehicle.id)
 
@@ -284,13 +452,15 @@ export default function VendorArmadaPage() {
               deposit_amount: Number(editDepositAmount),
               with_driver: editingVehicle.category === 'car' ? editWithDriver : false,
               is_active: editIsActive,
+              image_url: currentPrimaryUrl,
+              vehicle_images: combinedImages,
             }
           }
           return v
         })
       )
 
-      alert('Data armada berhasil diperbarui!')
+      alert('Data armada dan galeri foto berhasil diperbarui!')
       setEditingVehicle(null)
     } catch (err: any) {
       alert(err?.message || 'Terjadi kesalahan saat mengupdate kendaraan.')
@@ -299,7 +469,7 @@ export default function VendorArmadaPage() {
     }
   }
 
-  // 5. Fungsi Menghapus Unit Kendaraan
+  // 7. Fungsi Menghapus Unit Kendaraan
   const handleDeleteVehicle = async (id: string, name: string) => {
     if (!confirm(`Apakah Anda yakin ingin menghapus unit "${name}" dari armada Anda?`)) return
 
@@ -597,7 +767,7 @@ export default function VendorArmadaPage() {
           </form>
         </div>
 
-        {/* DAFTAR ARMADA TERDAFTAR (Gaya Kartu Modern Sesuai Gambar) */}
+        {/* DAFTAR ARMADA TERDAFTAR */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-900">
@@ -727,11 +897,11 @@ export default function VendorArmadaPage() {
       {/* MODAL EDIT UNIT POP-UP */}
       {editingVehicle && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-xl p-6 md:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl p-6 md:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 sticky top-0 bg-white z-10">
               <div>
                 <span className="text-[10px] font-bold text-[#0F52BA] uppercase tracking-wider">
-                  Update Informasi Armada
+                  Update Informasi & Galeri Foto
                 </span>
                 <h2 className="text-xl font-black text-slate-900">
                   Edit Unit {editingVehicle.brand} {editingVehicle.model}
@@ -746,7 +916,7 @@ export default function VendorArmadaPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4">
+            <form onSubmit={handleSaveEdit} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -874,8 +1044,118 @@ export default function VendorArmadaPage() {
                 </label>
               </div>
 
+              {/* KELOLA & TAMBAH FOTO DI MODAL EDIT */}
+              <div className="pt-4 border-t border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    📷 Galeri Foto Unit Kendaraan
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    {editExistingImages.length} Foto Aktif
+                  </span>
+                </div>
+
+                {/* Foto-Foto yang Sudah Ada */}
+                {editExistingImages.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-2">
+                      Foto Tersimpan Saat Ini (Klik "Set Sampul" untuk mengganti foto utama):
+                    </p>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                      {editExistingImages.map((img) => (
+                        <div
+                          key={img.id}
+                          className={`relative group rounded-xl overflow-hidden border aspect-square bg-slate-100 transition ${
+                            img.is_primary ? 'border-2 border-[#0F52BA] shadow-md' : 'border-slate-200'
+                          }`}
+                        >
+                          <img
+                            src={img.image_url}
+                            alt="Foto Unit"
+                            className="w-full h-full object-cover"
+                          />
+                          {img.is_primary ? (
+                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] bg-[#0F52BA] text-white font-bold shadow">
+                              Sampul Utama
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryPhoto(img.id, img.image_url)}
+                              className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] bg-slate-900/80 hover:bg-[#0F52BA] text-white font-bold opacity-0 group-hover:opacity-100 transition shadow"
+                              title="Jadikan Foto Sampul Utama"
+                            >
+                              Set Sampul
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExistingPhoto(img.id)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow"
+                            title="Hapus Foto Ini"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Unggah Foto Baru Tambahan */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    + Unggah Foto Baru ke Unit Ini:
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleSelectEditFiles}
+                    className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#0F52BA] file:text-white hover:file:bg-[#1E3A8A] cursor-pointer"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Bisa memilih banyak foto sekaligus (JPG, PNG, WEBP). Foto baru akan otomatis ditambahkan ke galeri unit ini saat Anda klik Simpan Perubahan.
+                  </p>
+
+                  {/* Preview Foto Baru yang Baru Dipilih */}
+                  {editNewPreviews.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-[11px] font-bold text-emerald-700 mb-1.5">
+                        Foto Baru yang Akan Diunggah ({editNewPreviews.length} Foto):
+                      </p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                        {editNewPreviews.map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group rounded-xl overflow-hidden border-2 border-emerald-500 aspect-square bg-slate-100"
+                          >
+                            <img
+                              src={url}
+                              alt={`Preview Baru ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] bg-emerald-600 text-white font-bold">
+                              Baru
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEditNewFile(idx)}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow"
+                              title="Batal Unggah Foto Ini"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Tombol Simpan & Batal */}
-              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 sticky bottom-0 bg-white z-10">
                 <button
                   type="button"
                   onClick={() => setEditingVehicle(null)}
@@ -886,9 +1166,9 @@ export default function VendorArmadaPage() {
                 <button
                   type="submit"
                   disabled={editUpdating}
-                  className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-500/25 transition disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:from-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-500/25 transition disabled:opacity-50"
                 >
-                  {editUpdating ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  {editUpdating ? 'Sedang Mengunggah & Menyimpan...' : 'Simpan Perubahan'}
                 </button>
               </div>
             </form>
