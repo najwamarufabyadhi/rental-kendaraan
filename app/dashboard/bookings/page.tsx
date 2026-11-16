@@ -91,12 +91,21 @@ export default function CustomerBookingsPage() {
         {/* Navigation & Title */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0F52BA] hover:underline mb-2"
-            >
-              ← Kembali ke Katalog Armada
-            </Link>
+            <div className="flex items-center gap-3 mb-2">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0F52BA] hover:underline"
+              >
+                ← Kembali ke Katalog Armada
+              </Link>
+              <span className="text-slate-300">•</span>
+              <Link
+                href="/dashboard/profile"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+              >
+                👤 Akun Saya
+              </Link>
+            </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Riwayat Sewa Saya</h1>
             <p className="text-xs text-slate-500">Kelola dan pantau seluruh status pemesanan kendaraan Anda.</p>
           </div>

@@ -122,6 +122,12 @@ export default function CustomerDashboard() {
             >
               📋 Pesanan Saya
             </Link>
+            <Link
+              href="/dashboard/profile"
+              className="px-4 py-2 text-sm font-semibold text-slate-700 hover:text-[#0F52BA] bg-slate-50 hover:bg-blue-50 rounded-xl transition border border-slate-200 flex items-center gap-1.5"
+            >
+              <span>👤</span> Akun Saya
+            </Link>
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition"
