@@ -133,7 +133,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-6">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>© {new Date().getFullYear()} RentalHub. Hak Cipta Dilindungi.</p>
+          <p>© 2026 RentalHub. Hak Cipta Dilindungi.</p>
           <div className="flex gap-6">
             <Link href="/login" className="hover:text-[#0F52BA]">Login</Link>
             <Link href="/register" className="hover:text-[#0F52BA]">Daftar</Link>
