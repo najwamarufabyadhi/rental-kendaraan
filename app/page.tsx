@@ -11,7 +11,7 @@ export default function HomePage() {
               R
             </div>
             <div>
-              <span className="text-xl font-black tracking-wider text-[#0F52BA] uppercase">RENTALHUB</span>
+              <span className="text-xl font-black tracking-wider text-[#0F52BA] uppercase">RENTALKU</span>
               <span className="text-[10px] block font-semibold text-slate-400 uppercase tracking-widest -mt-1">Multi-Vendor Fleet</span>
             </div>
           </div>

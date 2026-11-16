@@ -188,6 +188,17 @@ export default function VendorDashboard() {
             </Link>
 
             <Link
+              href="/vendor/reports"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-blue-100 hover:bg-white/10 hover:text-white font-medium text-sm transition"
+            >
+              <span className="text-lg">📈</span>
+              <span>Rekap Bulanan</span>
+              <span className="ml-auto text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-bold">
+                Laporan
+              </span>
+            </Link>
+
+            <Link
               href="/dashboard"
               className="flex items-center gap-3 px-4 py-3 rounded-xl text-blue-100 hover:bg-white/10 hover:text-white font-medium text-sm transition"
             >
@@ -414,7 +425,13 @@ export default function VendorDashboard() {
                 href="/vendor/bookings"
                 className="px-6 py-3 bg-gradient-to-r from-[#EF4444] to-[#DC2626] hover:from-[#DC2626] hover:to-[#B91C1C] text-white font-bold text-sm rounded-xl shadow-md shadow-red-500/20 transition flex items-center gap-2"
               >
-                <span>📑</span> Lihat Pesanan Masuk & Serah Terima →
+                <span>📑</span> Pesanan & Serah Terima →
+              </Link>
+              <Link
+                href="/vendor/reports"
+                className="px-6 py-3 bg-white text-slate-800 hover:text-[#0F52BA] font-bold text-sm rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition flex items-center gap-2"
+              >
+                <span>📈</span> Rekap Laporan Bulanan →
               </Link>
             </div>
           </div>

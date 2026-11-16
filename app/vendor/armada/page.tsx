@@ -249,6 +249,12 @@ export default function VendorArmadaPage() {
 
           <div className="flex items-center gap-2">
             <Link
+              href="/vendor/reports"
+              className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-xl text-xs transition flex items-center gap-1.5"
+            >
+              <span>📈</span> Rekap Bulanan
+            </Link>
+            <Link
               href="/vendor/bookings"
               className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition"
             >
