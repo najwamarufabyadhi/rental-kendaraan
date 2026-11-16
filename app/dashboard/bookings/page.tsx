@@ -7,6 +7,7 @@ import Link from 'next/link'
 
 interface CustomerBooking {
   id: string
+  vehicle_id: string
   service_type: 'self_drive' | 'with_driver'
   start_date: string
   end_date: string
@@ -16,6 +17,15 @@ interface CustomerBooking {
   pickup_location: string
   status: 'pending_payment' | 'confirmed' | 'in_use' | 'completed' | 'cancelled'
   payment_proof_url?: string | null
+  cancellation_reason?: string | null
+  handover_fuel_level?: string | null
+  handover_odometer?: string | null
+  handover_notes?: string | null
+  return_fuel_level?: string | null
+  return_deposit_refunded?: number | null
+  return_notes?: string | null
+  rating?: number | null
+  review_comment?: string | null
   vehicles: {
     brand: string
     model: string
@@ -35,6 +45,18 @@ export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState<CustomerBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string>('')
+
+  // State Modal Pembatalan Pesanan
+  const [cancellingBooking, setCancellingBooking] = useState<CustomerBooking | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellingLoading, setCancellingLoading] = useState(false)
+
+  // State Modal Beri Ulasan & Rating
+  const [reviewingBooking, setReviewingBooking] = useState<CustomerBooking | null>(null)
+  const [starRating, setStarRating] = useState(5)
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewLoading, setReviewLoading] = useState(false)
 
   useEffect(() => {
     const fetchMyBookings = async () => {
@@ -43,6 +65,8 @@ export default function CustomerBookingsPage() {
         router.push('/login')
         return
       }
+
+      setUserName(user.user_metadata?.full_name || 'Penyewa')
 
       // Mengambil data pesanan milik user beserta detail kendaraan & vendornya
       const { data, error } = await supabase
@@ -92,7 +116,6 @@ export default function CustomerBookingsPage() {
 
       const url = publicData.publicUrl
 
-      // Coba simpan payment_proof_url ke tabel bookings
       try {
         await supabase
           .from('bookings')
@@ -102,7 +125,6 @@ export default function CustomerBookingsPage() {
         console.warn('Simpan payment proof ke DB:', err)
       }
 
-      // Update state lokal
       setBookings(
         bookings.map((b) => (b.id === bookingId ? { ...b, payment_proof_url: url } : b))
       )
@@ -113,6 +135,88 @@ export default function CustomerBookingsPage() {
     } finally {
       setUploadingId(null)
     }
+  }
+
+  // Handler Pembatalan Pesanan
+  const handleConfirmCancel = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!cancellingBooking) return
+    setCancellingLoading(true)
+
+    try {
+      const reason = cancelReason.trim() || 'Dibatalkan oleh penyewa'
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: reason,
+        })
+        .eq('id', cancellingBooking.id)
+
+      if (error) throw error
+
+      setBookings(
+        bookings.map((b) =>
+          b.id === cancellingBooking.id
+            ? { ...b, status: 'cancelled', cancellation_reason: reason }
+            : b
+        )
+      )
+
+      alert('Pesanan sewa berhasil dibatalkan. Jadwal armada telah dibuka kembali.')
+      setCancellingBooking(null)
+      setCancelReason('')
+    } catch (err: any) {
+      alert('Gagal membatalkan pesanan: ' + (err?.message || 'Terjadi kesalahan'))
+    } finally {
+      setCancellingLoading(false)
+    }
+  }
+
+  // Handler Submit Ulasan & Rating Bintang
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reviewingBooking) return
+    setReviewLoading(true)
+
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          rating: starRating,
+          review_comment: reviewComment,
+        })
+        .eq('id', reviewingBooking.id)
+
+      if (error) throw error
+
+      setBookings(
+        bookings.map((b) =>
+          b.id === reviewingBooking.id
+            ? { ...b, rating: starRating, review_comment: reviewComment }
+            : b
+        )
+      )
+
+      alert('Terima kasih atas ulasan dan rating yang Anda berikan!')
+      setReviewingBooking(null)
+      setReviewComment('')
+    } catch (err: any) {
+      alert('Gagal mengirimkan ulasan: ' + (err?.message || 'Terjadi kesalahan'))
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  // Format tautan chat WhatsApp otomatis ke vendor
+  const getWhatsAppVendorLink = (item: CustomerBooking) => {
+    const message = `Halo ${item.vendors?.business_name || 'Vendor'}, saya ${userName} ingin konfirmasi pesanan rental #${item.id.slice(0, 8)} untuk unit ${item.vehicles?.brand} ${item.vehicles?.model} (Plat: ${item.vehicles?.plate_number}) periode ${item.start_date} s/d ${item.end_date}. Mohon informasinya, terima kasih!`
+    let cleanPhone = (item.vendors?.phone || '').replace(/[^0-9]/g, '')
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1)
+    }
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
   }
 
   const getStatusBadge = (status: string, hasProof: boolean) => {
@@ -130,11 +234,11 @@ export default function CustomerBookingsPage() {
       case 'confirmed':
         return <span className="px-3 py-1 text-xs font-bold bg-blue-100 text-[#0F52BA] rounded-full border border-blue-200">Siap Diambil</span>
       case 'in_use':
-        return <span className="px-3 py-1 text-xs font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">Sedang Berjalan</span>
+        return <span className="px-3 py-1 text-xs font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">Sedang Digunakan</span>
       case 'completed':
         return <span className="px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">Selesai</span>
       case 'cancelled':
-        return <span className="px-3 py-1 text-xs font-bold bg-red-100 text-red-800 rounded-full border border-red-200">Dibatalkan</span>
+        return <span className="px-3 py-1 text-xs font-bold bg-red-100 text-red-700 rounded-full border border-red-200">Dibatalkan</span>
       default:
         return <span className="px-3 py-1 text-xs font-bold bg-slate-100 text-slate-800 rounded-full">{status}</span>
     }
@@ -196,6 +300,8 @@ export default function CustomerBookingsPage() {
           <div className="space-y-5">
             {bookings.map((item) => {
               const hasProof = Boolean(item.payment_proof_url)
+              const canCancel = item.status === 'pending_payment' || item.status === 'confirmed'
+              const canReview = item.status === 'completed'
 
               return (
                 <div
@@ -252,7 +358,7 @@ export default function CustomerBookingsPage() {
                     </div>
                   </div>
 
-                  {/* KOTAK STATUS PEMBAYARAN (PENDING PAYMENT) */}
+                  {/* KOTAK STATUS PEMBAYARAN */}
                   {item.status === 'pending_payment' && (
                     <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-3">
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
@@ -268,7 +374,6 @@ export default function CustomerBookingsPage() {
                           </p>
                         </div>
 
-                        {/* Input Upload Bukti Transfer */}
                         <div>
                           <label className="inline-block px-4 py-2 bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] hover:from-[#1E3A8A] hover:to-[#172554] text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm transition">
                             {uploadingId === item.id ? 'Mengunggah...' : hasProof ? '🔄 Ganti Struk Transfer' : '📤 Upload Bukti Transfer'}
@@ -287,7 +392,6 @@ export default function CustomerBookingsPage() {
                         </div>
                       </div>
 
-                      {/* Preview Bukti Pembayaran yang Terunggah */}
                       {item.payment_proof_url && (
                         <div className="flex items-center gap-3 pt-2 border-t border-blue-200/80">
                           <a
@@ -313,12 +417,108 @@ export default function CustomerBookingsPage() {
                     </div>
                   )}
 
-                  {/* KOTAK PENGINGAT 2 IDENTITAS FISIK */}
-                  <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
-                    <span className="text-base shrink-0">⚠️</span>
-                    <p leading-relaxed>
-                      <strong>Ketentuan Wajib Serah-Terima:</strong> Pastikan Anda membawa dan menyerahkan <strong>2 dokumen identitas fisik asli</strong> (misal: e-KTP fisik + NPWP / SIM / BPJS / Paspor / Kartu Pegawai) sebagai jaminan saat bertemu langsung dengan vendor.
-                    </p>
+                  {/* KOTAK INSPEKSI SERAH-TERIMA DIGITAL */}
+                  {(item.handover_fuel_level || item.return_deposit_refunded !== undefined) && (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
+                      <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <span>📋</span> Catatan Inspeksi Serah-Terima Kendaraan
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                        {item.handover_fuel_level && (
+                          <div>
+                            <span className="text-slate-400 block">Posisi Awal Saat Ambil:</span>
+                            <span className="font-semibold text-slate-800">
+                              Bensin: {item.handover_fuel_level} • KM: {item.handover_odometer || '-'}
+                            </span>
+                            {item.handover_notes && (
+                              <p className="text-slate-500 italic mt-0.5">"{item.handover_notes}"</p>
+                            )}
+                          </div>
+                        )}
+                        {item.return_deposit_refunded !== undefined && item.return_deposit_refunded !== null && (
+                          <div>
+                            <span className="text-slate-400 block">Pengembalian Uang Jaminan:</span>
+                            <span className="font-bold text-emerald-700">
+                              Rp {item.return_deposit_refunded.toLocaleString('id-ID')} Dikembalikan
+                            </span>
+                            {item.return_notes && (
+                              <p className="text-slate-500 italic mt-0.5">"{item.return_notes}"</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* KOTAK ULASAN SAYA JIKA SUDAH MEMBERIKAN REVIEW */}
+                  {item.rating && (
+                    <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-500 font-black text-sm">
+                          {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
+                        </span>
+                        <span className="font-bold text-slate-800">Ulasan Anda ({item.rating}/5)</span>
+                      </div>
+                      {item.review_comment && (
+                        <p className="text-slate-600 mt-1 italic text-[11px]">"{item.review_comment}"</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* KOTAK ALASAN PEMBATALAN */}
+                  {item.status === 'cancelled' && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
+                      <strong>Pesanan Dibatalkan:</strong> {item.cancellation_reason || 'Tidak ada keterangan'}
+                    </div>
+                  )}
+
+                  {/* PENGINGAT 2 IDENTITAS FISIK */}
+                  {item.status !== 'cancelled' && item.status !== 'completed' && (
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                      <span className="text-base shrink-0">⚠️</span>
+                      <p>
+                        <strong>Ketentuan Wajib Serah-Terima:</strong> Pastikan Anda membawa dan menyerahkan <strong>2 dokumen identitas fisik asli</strong> (misal: e-KTP fisik + NPWP / SIM / BPJS / Paspor / Kartu Pegawai) sebagai jaminan saat bertemu langsung dengan vendor.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* BARIS TOMBOL AKSI: CHAT WA, BATALKAN, BERI ULASAN */}
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Tombol Chat WhatsApp Otomatis ke Vendor */}
+                      <a
+                        href={getWhatsAppVendorLink(item)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+                      >
+                        <span>💬</span> Chat WA Vendor
+                      </a>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Tombol Batalkan Pesanan */}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          onClick={() => setCancellingBooking(item)}
+                          className="px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl border border-red-200 transition"
+                        >
+                          Batalkan Pesanan
+                        </button>
+                      )}
+
+                      {/* Tombol Beri Rating & Ulasan */}
+                      {canReview && !item.rating && (
+                        <button
+                          type="button"
+                          onClick={() => setReviewingBooking(item)}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+                        >
+                          <span>⭐</span> Beri Ulasan & Rating
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -326,6 +526,124 @@ export default function CustomerBookingsPage() {
           </div>
         )}
       </div>
+
+      {/* MODAL 1: BATALKAN PESANAN */}
+      {cancellingBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div>
+              <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Konfirmasi Pembatalan</span>
+              <h2 className="text-xl font-black text-slate-900 mt-0.5">Batalkan Pesanan Sewa?</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Unit {cancellingBooking.vehicles?.brand} {cancellingBooking.vehicles?.model} (ID: #{cancellingBooking.id.slice(0, 8)}) akan dibatalkan dan tanggal sewa otomatis dibuka kembali.
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmCancel} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Alasan Pembatalan
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Contoh: Perubahan jadwal perjalanan / Urusan mendadak..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-red-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCancellingBooking(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancellingLoading}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-500/25 transition disabled:opacity-50"
+                >
+                  {cancellingLoading ? 'Membatalkan...' : 'Ya, Batalkan Pesanan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: BERI RATING & ULASAN BINTANG */}
+      {reviewingBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div>
+              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Ulasan Pelanggan</span>
+              <h2 className="text-xl font-black text-slate-900 mt-0.5">Beri Nilai Pengalaman Sewa</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Bagaimana kondisi armada {reviewingBooking.vehicles?.brand} {reviewingBooking.vehicles?.model} dan pelayanan {reviewingBooking.vendors?.business_name}?
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                  Pilih Rating Bintang:
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setStarRating(star)}
+                      className={`text-3xl transition transform active:scale-95 ${
+                        star <= starRating ? 'text-amber-400' : 'text-slate-200'
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-slate-700 ml-2">({starRating} dari 5 Bintang)</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Komentar / Pengalaman Anda
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Contoh: Mobil sangat bersih, AC dingin, dan vendor ramah saat serah-terima. Sangat puas!"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReviewingBooking(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={reviewLoading}
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-500/25 transition disabled:opacity-50"
+                >
+                  {reviewLoading ? 'Mengirim...' : 'Kirim Ulasan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

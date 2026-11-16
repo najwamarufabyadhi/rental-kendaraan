@@ -30,6 +30,15 @@ interface VendorBooking {
   pickup_location: string
   status: 'pending_payment' | 'confirmed' | 'in_use' | 'completed' | 'cancelled'
   payment_proof_url?: string | null
+  cancellation_reason?: string | null
+  handover_fuel_level?: string | null
+  handover_odometer?: string | null
+  handover_notes?: string | null
+  return_fuel_level?: string | null
+  return_deposit_refunded?: number | null
+  return_notes?: string | null
+  rating?: number | null
+  review_comment?: string | null
   vehicles: {
     brand: string
     model: string
@@ -46,6 +55,7 @@ export default function VendorBookingsPage() {
   const [bookings, setBookings] = useState<VendorBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [vendorName, setVendorName] = useState<string>('')
 
   // State untuk Modal Cek KYC Dokumen Penyewa
   const [selectedKycBooking, setSelectedKycBooking] = useState<VendorBooking | null>(null)
@@ -55,6 +65,27 @@ export default function VendorBookingsPage() {
 
   // State untuk Modal Zoom Foto
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
+
+  // State untuk Modal Digital Handover (Serah Kunci Awal)
+  const [handoverBooking, setHandoverBooking] = useState<VendorBooking | null>(null)
+  const [fuelLevel, setFuelLevel] = useState('Full')
+  const [odometer, setOdometer] = useState('')
+  const [handoverNotes, setHandoverNotes] = useState('')
+  const [checkedPhysicalIds, setCheckedPhysicalIds] = useState(false)
+  const [submittingHandover, setSubmittingHandover] = useState(false)
+
+  // State untuk Modal Return Inspection (Unit Kembali & Pengembalian Deposit)
+  const [returnBooking, setReturnBooking] = useState<VendorBooking | null>(null)
+  const [returnFuelLevel, setReturnFuelLevel] = useState('Full')
+  const [depositRefundAmount, setDepositRefundAmount] = useState('0')
+  const [returnNotes, setReturnNotes] = useState('')
+  const [returnedPhysicalIds, setReturnedPhysicalIds] = useState(false)
+  const [submittingReturn, setSubmittingReturn] = useState(false)
+
+  // State untuk Modal Pembatalan oleh Vendor
+  const [cancellingBooking, setCancellingBooking] = useState<VendorBooking | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellingLoading, setCancellingLoading] = useState(false)
 
   useEffect(() => {
     const fetchVendorBookings = async () => {
@@ -66,7 +97,7 @@ export default function VendorBookingsPage() {
 
       const { data: vendor } = await supabase
         .from('vendors')
-        .select('id')
+        .select('*')
         .eq('owner_id', user.id)
         .maybeSingle()
 
@@ -74,6 +105,8 @@ export default function VendorBookingsPage() {
         router.push('/vendor/dashboard')
         return
       }
+
+      setVendorName(vendor.business_name || 'Mitra RentalHub')
 
       // Ambil pesanan masuk beserta data armada & data profil lengkap penyewa
       const { data, error } = await supabase
@@ -100,7 +133,7 @@ export default function VendorBookingsPage() {
     fetchVendorBookings()
   }, [router, supabase])
 
-  // Fungsi memperbarui status pesanan (pending_payment -> confirmed -> in_use -> completed)
+  // Helper update status sederhana
   const handleUpdateStatus = async (
     bookingId: string,
     nextStatus: 'confirmed' | 'in_use' | 'completed'
@@ -118,21 +151,162 @@ export default function VendorBookingsPage() {
       return
     }
 
-    // Perbarui status di state lokal
     setBookings(
       bookings.map((b) => (b.id === bookingId ? { ...b, status: nextStatus } : b))
     )
     setUpdatingId(null)
   }
 
-  // Konfirmasi Serah Kunci dengan Persyaratan 2 Identitas Fisik
-  const handleStartRental = (booking: VendorBooking) => {
-    const confirmed = confirm(
-      `PENTING — PERSYARATAN JAMINAN FISIK:\n\nPastikan Anda telah MEMERIKSA KTP & SIM asli serta MENERIMA 2 DOKUMEN IDENTITAS FISIK ASLI dari penyewa (${booking.profiles?.full_name || 'Penyewa'}) sebagai jaminan selama masa sewa.\n\nApakah Anda sudah menerima 2 dokumen identitas fisik asli tersebut?`
-    )
-    if (!confirmed) return
+  // 1. Membuka Modal Handover Serah Kunci
+  const handleOpenHandover = (booking: VendorBooking) => {
+    setHandoverBooking(booking)
+    setFuelLevel('Full')
+    setOdometer('')
+    setHandoverNotes('')
+    setCheckedPhysicalIds(false)
+  }
 
-    handleUpdateStatus(booking.id, 'in_use')
+  // Submit Handover Checklist
+  const handleSubmitHandover = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!handoverBooking) return
+    if (!checkedPhysicalIds) {
+      alert('Anda wajib mencentang konfirmasi penerimaan 2 dokumen identitas fisik asli sebelum menyerahkan kunci.')
+      return
+    }
+
+    setSubmittingHandover(true)
+
+    try {
+      const payload: Record<string, any> = {
+        status: 'in_use',
+        handover_fuel_level: fuelLevel,
+        handover_odometer: odometer,
+        handover_notes: handoverNotes,
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update(payload)
+        .eq('id', handoverBooking.id)
+
+      if (error) throw error
+
+      setBookings(
+        bookings.map((b) =>
+          b.id === handoverBooking.id
+            ? { ...b, ...payload }
+            : b
+        )
+      )
+
+      alert('Serah terima kunci berhasil dicatat! Status armada kini sedang digunakan.')
+      setHandoverBooking(null)
+    } catch (err: any) {
+      alert('Gagal menyimpan handover: ' + (err?.message || 'Terjadi kesalahan'))
+    } finally {
+      setSubmittingHandover(false)
+    }
+  }
+
+  // 2. Membuka Modal Return & Pengembalian Deposit
+  const handleOpenReturn = (booking: VendorBooking) => {
+    setReturnBooking(booking)
+    setReturnFuelLevel(booking.handover_fuel_level || 'Full')
+    // Default kembalikan 100% deposit
+    setDepositRefundAmount(String(booking.deposit_amount || 0))
+    setReturnNotes('Unit kembali dalam kondisi baik tanpa kerusakan.')
+    setReturnedPhysicalIds(false)
+  }
+
+  // Submit Return & Selesai
+  const handleSubmitReturn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!returnBooking) return
+    if (!returnedPhysicalIds) {
+      alert('Anda wajib mencentang konfirmasi pengembalian 2 dokumen identitas fisik asli kepada penyewa.')
+      return
+    }
+
+    setSubmittingReturn(true)
+
+    try {
+      const payload: Record<string, any> = {
+        status: 'completed',
+        return_fuel_level: returnFuelLevel,
+        return_deposit_refunded: Number(depositRefundAmount),
+        return_notes: returnNotes,
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update(payload)
+        .eq('id', returnBooking.id)
+
+      if (error) throw error
+
+      setBookings(
+        bookings.map((b) =>
+          b.id === returnBooking.id
+            ? { ...b, ...payload }
+            : b
+        )
+      )
+
+      alert('Transaksi sewa selesai! Unit armada kini telah kembali dan siap disewa kembali.')
+      setReturnBooking(null)
+    } catch (err: any) {
+      alert('Gagal menyelesaikan pesanan: ' + (err?.message || 'Terjadi kesalahan'))
+    } finally {
+      setSubmittingReturn(false)
+    }
+  }
+
+  // 3. Pembatalan oleh Vendor
+  const handleConfirmCancelVendor = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!cancellingBooking) return
+    setCancellingLoading(true)
+
+    try {
+      const reason = cancelReason.trim() || 'Dibatalkan oleh pihak vendor'
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: reason,
+        })
+        .eq('id', cancellingBooking.id)
+
+      if (error) throw error
+
+      setBookings(
+        bookings.map((b) =>
+          b.id === cancellingBooking.id
+            ? { ...b, status: 'cancelled', cancellation_reason: reason }
+            : b
+        )
+      )
+
+      alert('Pesanan berhasil dibatalkan.')
+      setCancellingBooking(null)
+      setCancelReason('')
+    } catch (err: any) {
+      alert('Gagal membatalkan pesanan: ' + (err?.message || 'Terjadi kesalahan'))
+    } finally {
+      setCancellingLoading(false)
+    }
+  }
+
+  // Format Tautan WhatsApp ke Penyewa
+  const getWhatsAppCustomerLink = (item: VendorBooking) => {
+    const message = `Halo ${item.profiles?.full_name || 'Pelanggan'}, kami dari ${vendorName} ingin mengonfirmasi pesanan sewa #${item.id.slice(0, 8)} untuk armada ${item.vehicles?.brand} ${item.vehicles?.model} (Plat: ${item.vehicles?.plate_number}) periode ${item.start_date} s/d ${item.end_date}. Mohon konfirmasi jadwal serah-terima unit. Terima kasih!`
+    let cleanPhone = (item.profiles?.phone || '').replace(/[^0-9]/g, '')
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1)
+    }
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
   }
 
   return (
@@ -154,7 +328,7 @@ export default function VendorBookingsPage() {
                 Vendor Console
               </span>
               <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Pesanan Masuk & Verifikasi Dokumen
+                Pesanan Masuk & Serah Terima Digital
               </h1>
             </div>
           </div>
@@ -249,12 +423,17 @@ export default function VendorBookingsPage() {
                         )}
                         {item.status === 'in_use' && (
                           <span className="px-3 py-1 text-xs font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
-                            Sedang Berjalan
+                            Sedang Digunakan
                           </span>
                         )}
                         {item.status === 'completed' && (
                           <span className="px-3 py-1 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
                             ✓ Selesai
+                          </span>
+                        )}
+                        {item.status === 'cancelled' && (
+                          <span className="px-3 py-1 text-xs font-bold bg-red-100 text-red-700 rounded-full border border-red-200">
+                            Dibatalkan
                           </span>
                         )}
                       </div>
@@ -298,10 +477,64 @@ export default function VendorBookingsPage() {
                     </div>
                   </div>
 
+                  {/* Catatan Inspeksi Handover Digital (Jika ada) */}
+                  {(item.handover_fuel_level || item.return_deposit_refunded !== undefined) && (
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                      <p className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <span>📋</span> Data Inspeksi Kendaraan:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        {item.handover_fuel_level && (
+                          <p>
+                            <strong>Awal:</strong> Bensin {item.handover_fuel_level} • KM {item.handover_odometer || '-'} • Catatan: {item.handover_notes || 'Normal'}
+                          </p>
+                        )}
+                        {item.return_deposit_refunded !== undefined && item.return_deposit_refunded !== null && (
+                          <p>
+                            <strong>Kembali:</strong> Bensin {item.return_fuel_level || '-'} • Deposit Kembali Rp {item.return_deposit_refunded.toLocaleString('id-ID')} • Catatan: {item.return_notes || '-'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tampilan Rating & Ulasan Pelanggan */}
+                  {item.rating && (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-500 font-bold text-sm">
+                          {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          Ulasan Penyewa ({item.rating}/5)
+                        </span>
+                      </div>
+                      {item.review_comment && (
+                        <p className="text-slate-600 italic text-[11px] mt-0.5">"{item.review_comment}"</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Keterangan Pembatalan */}
+                  {item.status === 'cancelled' && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
+                      <strong>Pesanan Dibatalkan:</strong> {item.cancellation_reason || 'Dibatalkan'}
+                    </div>
+                  )}
+
                   {/* Baris Tombol Aksi & Verifikasi */}
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
-                    {/* Tombol-Tombol Pemeriksaan Dokumen & Pembayaran */}
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Tombol Chat WhatsApp Otomatis ke Penyewa */}
+                      <a
+                        href={getWhatsAppCustomerLink(item)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+                      >
+                        <span>💬</span> Chat WA Penyewa
+                      </a>
+
                       {/* Tombol Cek Dokumen KYC Penyewa */}
                       <button
                         type="button"
@@ -312,7 +545,7 @@ export default function VendorBookingsPage() {
                             : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
                         }`}
                       >
-                        <span>🔍</span> Cek KYC & KTP/SIM
+                        <span>🔍</span> Cek KYC & Identitas
                         {isKycComplete ? (
                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         ) : (
@@ -321,7 +554,7 @@ export default function VendorBookingsPage() {
                       </button>
 
                       {/* Tombol Cek Bukti Pembayaran */}
-                      {item.payment_proof_url ? (
+                      {item.payment_proof_url && (
                         <button
                           type="button"
                           onClick={() => setSelectedProofBooking(item)}
@@ -329,44 +562,56 @@ export default function VendorBookingsPage() {
                         >
                           <span>🧾</span> Cek Bukti Transfer
                         </button>
-                      ) : (
-                        item.status === 'pending_payment' && (
-                          <span className="text-[11px] text-slate-400 italic">
-                            Belum upload bukti bayar
-                          </span>
-                        )
                       )}
                     </div>
 
-                    {/* Tombol Proses Status */}
+                    {/* Tombol Proses Status & Pembatalan */}
                     <div className="flex items-center gap-2">
                       {item.status === 'pending_payment' && (
-                        <button
-                          disabled={updatingId === item.id}
-                          onClick={() => handleUpdateStatus(item.id, 'confirmed')}
-                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 disabled:opacity-50 transition"
-                        >
-                          ✓ Konfirmasi Pembayaran
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setCancellingBooking(item)}
+                            className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl border border-red-200 transition"
+                          >
+                            Batalkan
+                          </button>
+                          <button
+                            disabled={updatingId === item.id}
+                            onClick={() => handleUpdateStatus(item.id, 'confirmed')}
+                            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 disabled:opacity-50 transition"
+                          >
+                            ✓ Konfirmasi Pembayaran
+                          </button>
+                        </>
                       )}
 
                       {item.status === 'confirmed' && (
-                        <button
-                          disabled={updatingId === item.id}
-                          onClick={() => handleStartRental(item)}
-                          className="px-5 py-2.5 bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] hover:from-[#1E3A8A] hover:to-[#172554] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 disabled:opacity-50 transition flex items-center gap-1.5"
-                        >
-                          <span>🔑</span> Serah Kunci (Cek 2 ID Fisik)
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setCancellingBooking(item)}
+                            className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl border border-red-200 transition"
+                          >
+                            Batalkan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenHandover(item)}
+                            className="px-5 py-2.5 bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] hover:from-[#1E3A8A] hover:to-[#172554] text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-1.5"
+                          >
+                            <span>🔑</span> Serah Kunci (Inspeksi Fisik)
+                          </button>
+                        </>
                       )}
 
                       {item.status === 'in_use' && (
                         <button
-                          disabled={updatingId === item.id}
-                          onClick={() => handleUpdateStatus(item.id, 'completed')}
-                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 disabled:opacity-50 transition flex items-center gap-1.5"
+                          type="button"
+                          onClick={() => handleOpenReturn(item)}
+                          className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-500/20 transition flex items-center gap-1.5"
                         >
-                          <span>✅</span> Unit Kembali & Selesai
+                          <span>✅</span> Unit Kembali & Cek Deposit
                         </button>
                       )}
                     </div>
@@ -400,7 +645,6 @@ export default function VendorBookingsPage() {
               </button>
             </div>
 
-            {/* Informasi Biodata & Kontak Darurat */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <div>
                 <p className="text-slate-400 font-semibold uppercase">Nama Lengkap</p>
@@ -424,7 +668,6 @@ export default function VendorBookingsPage() {
               </div>
             </div>
 
-            {/* Peringatan Wajib Jaminan 2 Identitas Fisik */}
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
               <p className="font-bold flex items-center gap-1.5">
                 <span>⚠️</span> Aturan Wajib Jaminan Fisik:
@@ -434,14 +677,12 @@ export default function VendorBookingsPage() {
               </p>
             </div>
 
-            {/* Galeri Dokumen Identitas (KTP, SIM A, SIM C) */}
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Dokumen Digital yang Diunggah Penyewa:
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Dokumen KTP */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-800">1. KTP Asli</span>
@@ -472,7 +713,6 @@ export default function VendorBookingsPage() {
                   )}
                 </div>
 
-                {/* Dokumen SIM A (Mobil) */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-800">2. SIM A (Mobil)</span>
@@ -503,7 +743,6 @@ export default function VendorBookingsPage() {
                   )}
                 </div>
 
-                {/* Dokumen SIM C (Motor) */}
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-slate-800">3. SIM C (Motor)</span>
@@ -614,7 +853,254 @@ export default function VendorBookingsPage() {
         </div>
       )}
 
-      {/* MODAL 3: ZOOM FOTO FULLSCREEN */}
+      {/* MODAL 3: DIGITAL HANDOVER CHECKLIST (SERAH KUNCI & INSPEKSI AWAL) */}
+      {handoverBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 md:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8">
+            <div className="border-b border-slate-100 pb-4">
+              <span className="text-[10px] font-bold text-[#0F52BA] uppercase tracking-wider">
+                Digital Handover Checklist
+              </span>
+              <h2 className="text-xl font-black text-slate-900">
+                Inspeksi Awal Serah Kunci
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Unit {handoverBooking.vehicles?.brand} {handoverBooking.vehicles?.model} ({handoverBooking.vehicles?.plate_number})
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitHandover} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Posisi Level Bensin
+                  </label>
+                  <select
+                    value={fuelLevel}
+                    onChange={(e) => setFuelLevel(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  >
+                    <option value="Full (Penuh)">Full (Penuh)</option>
+                    <option value="3/4 Bar">3/4 Bar</option>
+                    <option value="1/2 Bar">1/2 Bar</option>
+                    <option value="1/4 Bar">1/4 Bar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Angka Odometer (KM)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={odometer}
+                    onChange={(e) => setOdometer(e.target.value)}
+                    placeholder="Contoh: 45210"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Catatan Kondisi Fisik / Baret Eksisting
+                </label>
+                <textarea
+                  rows={2}
+                  value={handoverNotes}
+                  onChange={(e) => setHandoverNotes(e.target.value)}
+                  placeholder="Contoh: Baret halus bumper depan kanan, ban serep lengkap, toolkit ada..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                />
+              </div>
+
+              {/* CHECKLIST 2 IDENTITAS FISIK */}
+              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={checkedPhysicalIds}
+                    onChange={(e) => setCheckedPhysicalIds(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-[#0F52BA] rounded"
+                  />
+                  <span className="text-xs font-bold text-amber-950">
+                    Konfirmasi: Saya telah memeriksa KTP/SIM asli dan MENERIMA 2 DOKUMEN IDENTITAS FISIK ASLI dari penyewa ({handoverBooking.profiles?.full_name}) sebagai jaminan.
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setHandoverBooking(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingHandover}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#0F52BA] to-[#1E3A8A] hover:from-[#1E3A8A] hover:to-[#172554] text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/25 transition disabled:opacity-50"
+                >
+                  {submittingHandover ? 'Menyimpan...' : 'Serahkan Kunci & Mulai Sewa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: RETURN INSPECTION & PENGEMBALIAN DEPOSIT */}
+      {returnBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 md:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8">
+            <div className="border-b border-slate-100 pb-4">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                Unit Return & Deposit Settlement
+              </span>
+              <h2 className="text-xl font-black text-slate-900">
+                Pemeriksaan Unit Kembali & Deposit
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Total Uang Jaminan Awal: <strong>Rp {returnBooking.deposit_amount.toLocaleString('id-ID')}</strong>
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitReturn} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Bensin Saat Kembali
+                  </label>
+                  <select
+                    value={returnFuelLevel}
+                    onChange={(e) => setReturnFuelLevel(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                  >
+                    <option value="Full (Penuh)">Full (Sesuai)</option>
+                    <option value="3/4 Bar">3/4 Bar</option>
+                    <option value="1/2 Bar">1/2 Bar</option>
+                    <option value="1/4 Bar">1/4 Bar (Kurang)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Nominal Deposit Dikembalikan (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    max={returnBooking.deposit_amount}
+                    value={depositRefundAmount}
+                    onChange={(e) => setDepositRefundAmount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold focus:ring-2 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Catatan Pengembalian (Kondisi Unit / Potongan Denda)
+                </label>
+                <textarea
+                  rows={2}
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  placeholder="Contoh: Unit bersih, tidak ada baret baru, deposit Rp 500.000 dikembalikan penuh."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-[#0F52BA] outline-none"
+                />
+              </div>
+
+              {/* CHECKLIST PENGEMBALIAN 2 IDENTITAS FISIK */}
+              <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={returnedPhysicalIds}
+                    onChange={(e) => setReturnedPhysicalIds(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <span className="text-xs font-bold text-emerald-950">
+                    Konfirmasi: Saya telah MENYERAHKAN KEMBALI 2 dokumen identitas fisik asli kepada penyewa ({returnBooking.profiles?.full_name}).
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReturnBooking(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReturn}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-500/25 transition disabled:opacity-50"
+                >
+                  {submittingReturn ? 'Menyimpan...' : 'Selesaikan Transaksi & Tutup Sewa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: PEMBATALAN OLEH VENDOR */}
+      {cancellingBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div>
+              <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Pembatalan Pesanan</span>
+              <h2 className="text-xl font-black text-slate-900 mt-0.5">Batalkan Pesanan Ini?</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Pesanan sewa #{cancellingBooking.id.slice(0, 8)} akan dibatalkan.
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmCancelVendor} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Alasan Pembatalan
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Contoh: Unit mendadak harus masuk bengkel / Jadwal tidak memungkinkan..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-red-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCancellingBooking(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancellingLoading}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md shadow-red-500/25 transition disabled:opacity-50"
+                >
+                  {cancellingLoading ? 'Membatalkan...' : 'Ya, Batalkan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: ZOOM FOTO FULLSCREEN */}
       {zoomImageUrl && (
         <div
           onClick={() => setZoomImageUrl(null)}
