@@ -49,6 +49,7 @@ function VehicleBookingContent() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [pickupLocation, setPickupLocation] = useState('')
+  const [agreePhysicalIds, setAgreePhysicalIds] = useState(false)
 
   useEffect(() => {
     if (!vehicleId) return
@@ -118,6 +119,11 @@ function VehicleBookingContent() {
       return
     }
 
+    if (!agreePhysicalIds) {
+      alert('Anda wajib menyetujui persyaratan penyerahan 2 identitas fisik asli sebelum memesan unit.')
+      return
+    }
+
     setSubmitting(true)
 
     try {
@@ -145,7 +151,7 @@ function VehicleBookingContent() {
         return
       }
 
-      // 2. Jika tersedia, simpan data pesanan ke tabel 'bookings'
+      // 2. Jika tersedia, simpan data pesanan ke tabel 'bookings' dengan status 'pending_payment'
       const { error: insertError } = await supabase.from('bookings').insert({
         customer_id: user.id,
         vehicle_id: vehicle.id,
@@ -158,7 +164,7 @@ function VehicleBookingContent() {
         deposit_amount: activeDeposit,
         grand_total: grandTotal,
         pickup_location: serviceType === 'with_driver' ? pickupLocation : vehicle.vendors.address,
-        status: 'confirmed',
+        status: 'pending_payment',
       })
 
       if (insertError) {
@@ -166,7 +172,7 @@ function VehicleBookingContent() {
         return
       }
 
-      alert('Pemesanan berhasil dikonfirmasi!')
+      alert('Pesanan berhasil dibuat! Silakan lakukan transfer dan unggah bukti pembayaran di menu Pesanan Saya.')
       router.push('/dashboard/bookings')
     } catch (err: any) {
       alert('Terjadi kesalahan: ' + (err?.message || 'Gagal memproses pesanan'))
@@ -343,12 +349,35 @@ function VehicleBookingContent() {
                 </div>
               )}
 
+              {/* Syarat Wajib Jaminan 2 Identitas Fisik */}
+              <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                  <span className="text-base">⚠️</span>
+                  <span>Syarat Wajib: Jaminan 2 Identitas Fisik Asli</span>
+                </div>
+                <p className="text-amber-800 leading-relaxed text-[11px]">
+                  Penyewa <strong>wajib menitipkan/menyerahkan 2 dokumen identitas fisik asli</strong> kepada vendor saat serah-terima unit di lokasi (contoh: e-KTP fisik asli + NPWP / SIM / BPJS / Paspor / Kartu Mahasiswa / Kartu Karyawan). Dokumen akan disimpan aman oleh pihak vendor dan dikembalikan 100% utuh saat unit sewa dikembalikan.
+                </p>
+                <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={agreePhysicalIds}
+                    onChange={(e) => setAgreePhysicalIds(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-[#0F52BA] rounded"
+                  />
+                  <span className="text-xs font-bold text-slate-800">
+                    Saya menyetujui & bersedia menyerahkan 2 identitas fisik asli saat serah-terima kendaraan
+                  </span>
+                </label>
+              </div>
+
               <button
                 type="submit"
-                disabled={submitting || totalDays <= 0}
+                disabled={submitting || totalDays <= 0 || !agreePhysicalIds}
                 className="w-full py-3.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-500/25 transition transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
               >
-                {submitting ? 'Memeriksa Jadwal & Memproses...' : 'Konfirmasi & Pesan Unit Sekarang'}
+                {submitting ? 'Memeriksa Jadwal & Memproses...' : 'Lanjut ke Pembayaran Sewa →'}
               </button>
             </form>
           </div>
