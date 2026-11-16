@@ -33,6 +33,12 @@ interface VehicleDetail {
   }
 }
 
+const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+]
+const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+
 function VehicleBookingContent() {
   const params = useParams()
   const router = useRouter()
@@ -44,6 +50,13 @@ function VehicleBookingContent() {
   const [submitting, setSubmitting] = useState(false)
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0)
 
+  // State Jadwal yang Sudah Dibooking (dari tabel bookings)
+  const [bookedDates, setBookedDates] = useState<string[]>([])
+
+  // State Kalender Visual (Bulan & Tahun saat ini)
+  const [calendarYear, setCalendarYear] = useState(2026)
+  const [calendarMonth, setCalendarMonth] = useState(10) // 10 = November
+
   // State Form Pemesanan
   const [serviceType, setServiceType] = useState<'self_drive' | 'with_driver'>('self_drive')
   const [startDate, setStartDate] = useState('')
@@ -52,9 +65,15 @@ function VehicleBookingContent() {
   const [agreePhysicalIds, setAgreePhysicalIds] = useState(false)
 
   useEffect(() => {
+    // Sinkronkan bulan kalender ke waktu perangkat saat runtime
+    const now = new Date()
+    setCalendarYear(now.getFullYear())
+    setCalendarMonth(now.getMonth())
+
     if (!vehicleId) return
 
     const fetchDetail = async () => {
+      // 1. Ambil detail kendaraan
       const { data, error } = await supabase
         .from('vehicles')
         .select(`
@@ -81,6 +100,29 @@ function VehicleBookingContent() {
       }
 
       setVehicle(data as unknown as VehicleDetail)
+
+      // 2. Ambil seluruh tanggal sewa yang aktif untuk kendaraan ini
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('start_date, end_date, status')
+        .eq('vehicle_id', vehicleId)
+        .neq('status', 'cancelled')
+
+      if (bookingsData) {
+        const datesSet = new Set<string>()
+        bookingsData.forEach((b) => {
+          if (b.start_date && b.end_date) {
+            let cur = new Date(b.start_date)
+            const stop = new Date(b.end_date)
+            while (cur <= stop) {
+              datesSet.add(cur.toISOString().split('T')[0])
+              cur.setDate(cur.getDate() + 1)
+            }
+          }
+        })
+        setBookedDates(Array.from(datesSet))
+      }
+
       setLoading(false)
     }
 
@@ -99,16 +141,64 @@ function VehicleBookingContent() {
 
   const totalDays = calculateDays()
   const basePrice = vehicle ? totalDays * vehicle.daily_rate : 0
-  // Sesuai aturan bisnis: Jika dengan supir, uang deposit Rp 0
   const activeDeposit = vehicle && serviceType === 'self_drive' ? vehicle.deposit_amount : 0
   const grandTotal = basePrice + activeDeposit
 
-  // Kumpulan foto dari tabel vehicle_images, dengan fallback ke vehicle.image_url
   const galleryImages = (vehicle?.vehicle_images && vehicle.vehicle_images.length > 0)
     ? vehicle.vehicle_images.map((img) => img.image_url)
     : (vehicle?.image_url ? [vehicle.image_url] : [])
 
   const activePhoto = galleryImages[selectedPhotoIndex] || galleryImages[0]
+
+  // Navigasi Bulan Kalender
+  const handlePrevMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11)
+      setCalendarYear(calendarYear - 1)
+    } else {
+      setCalendarMonth(calendarMonth - 1)
+    }
+  }
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0)
+      setCalendarYear(calendarYear + 1)
+    } else {
+      setCalendarMonth(calendarMonth + 1)
+    }
+  }
+
+  // Interaksi Klik Tanggal pada Kalender Visual
+  const handleCalendarDateClick = (dateStr: string) => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    if (dateStr < todayStr) {
+      alert('Tanggal tersebut sudah lewat.')
+      return
+    }
+    if (bookedDates.includes(dateStr)) {
+      alert('Maaf, unit ini sudah dibooking pada tanggal tersebut. Silakan pilih tanggal lain yang berwarna hijau.')
+      return
+    }
+
+    // Jika belum ada startDate, atau sudah terisi startDate & endDate, mulai pilihan baru
+    if (!startDate || (startDate && endDate)) {
+      setStartDate(dateStr)
+      setEndDate('')
+    } else if (startDate && !endDate) {
+      if (dateStr < startDate) {
+        setStartDate(dateStr)
+      } else {
+        // Validasi apakah ada tanggal terisi di antara startDate dan dateStr
+        const hasConflict = bookedDates.some((bDate) => bDate >= startDate && bDate <= dateStr)
+        if (hasConflict) {
+          alert('Terdapat tanggal yang sudah terisi di dalam rentang yang Anda pilih. Silakan pilih rentang lain.')
+          return
+        }
+        setEndDate(dateStr)
+      }
+    }
+  }
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,7 +241,7 @@ function VehicleBookingContent() {
         return
       }
 
-      // 2. Jika tersedia, simpan data pesanan ke tabel 'bookings' dengan status 'pending_payment'
+      // 2. Simpan data pesanan ke tabel 'bookings' dengan status 'pending_payment'
       const { error: insertError } = await supabase.from('bookings').insert({
         customer_id: user.id,
         vehicle_id: vehicle.id,
@@ -181,6 +271,11 @@ function VehicleBookingContent() {
     }
   }
 
+  // Perhitungan Struktur Hari dalam Bulan Kalender
+  const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay()
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+  const todayStr = new Date().toISOString().split('T')[0]
+
   if (loading || !vehicle) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F0F4F9] text-slate-500">
@@ -204,8 +299,8 @@ function VehicleBookingContent() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Kolom Kiri: Info Kendaraan & Vendor */}
-          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+          {/* Kolom Kiri: Info Kendaraan, Galeri, Kalender Ketersediaan, & Form */}
+          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
             {/* Galeri Foto Kendaraan */}
             {galleryImages.length > 0 ? (
               <div className="space-y-3">
@@ -225,7 +320,7 @@ function VehicleBookingContent() {
                   </span>
                 </div>
 
-                {/* Thumbnail Galeri untuk navigasi foto */}
+                {/* Thumbnail Galeri */}
                 {galleryImages.length > 1 && (
                   <div className="flex gap-2.5 overflow-x-auto pb-1 pt-1">
                     {galleryImages.map((imgUrl, idx) => (
@@ -270,6 +365,123 @@ function VehicleBookingContent() {
               <p className="text-slate-600 pl-6">🏠 Alamat Garasi: {vehicle.vendors.address}</p>
             </div>
 
+            {/* 📅 KALENDER KETERSEDIAAN VISUAL (FITUR UTAMA BARU) */}
+            <div className="p-5 bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl border border-blue-100 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>📅</span> Kalender Ketersediaan Armada
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Klik tanggal pada kalender untuk memilih jadwal sewa Anda secara langsung.
+                  </p>
+                </div>
+
+                {/* Navigasi Bulan */}
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={handlePrevMonth}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-700 font-bold transition shadow-sm"
+                    title="Bulan Sebelumnya"
+                  >
+                    ‹
+                  </button>
+                  <span className="text-xs font-black text-[#0F52BA] px-2 min-w-28 text-center bg-white py-1 rounded-lg border border-slate-200 shadow-sm">
+                    {MONTH_NAMES[calendarMonth]} {calendarYear}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleNextMonth}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-700 font-bold transition shadow-sm"
+                    title="Bulan Berikutnya"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+
+              {/* Indikator Warna (Legend) */}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] pt-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300"></span>
+                  <span className="text-slate-600 font-medium">Tersedia (Bebas)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-rose-100 border border-rose-300"></span>
+                  <span className="text-slate-600 font-medium">Sudah Dibooking</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-[#0F52BA]"></span>
+                  <span className="text-slate-600 font-medium">Pilihan Jadwal Anda</span>
+                </div>
+              </div>
+
+              {/* Grid Kalender 7 Hari */}
+              <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-sm overflow-hidden">
+                <div className="grid grid-cols-7 gap-1 text-center font-bold text-[11px] text-slate-400 mb-2 border-b border-slate-100 pb-2">
+                  {DAY_NAMES.map((d, i) => (
+                    <div key={i} className={i === 0 ? 'text-rose-500' : ''}>
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                  {/* Kotak kosong sebelum hari pertama */}
+                  {Array.from({ length: firstDayIndex }).map((_, i) => (
+                    <div key={`empty-${i}`} className="h-11 rounded-lg"></div>
+                  ))}
+
+                  {/* Hari-hari dalam bulan */}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const dayNum = i + 1
+                    const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+
+                    const isPast = dateStr < todayStr
+                    const isBooked = bookedDates.includes(dateStr)
+                    const isSelectedStart = startDate === dateStr
+                    const isSelectedEnd = endDate === dateStr
+                    const isInSelectedRange = startDate && endDate && dateStr >= startDate && dateStr <= endDate
+
+                    // Logika Styling Box Tanggal
+                    let bgClasses = 'bg-emerald-50/70 border-emerald-200 text-slate-800 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer'
+                    let label = 'Tersedia'
+
+                    if (isPast) {
+                      bgClasses = 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed opacity-50'
+                      label = 'Lewat'
+                    } else if (isBooked) {
+                      bgClasses = 'bg-rose-50 border-rose-200 text-rose-800 cursor-not-allowed font-medium line-through'
+                      label = 'Disewa'
+                    } else if (isSelectedStart || isSelectedEnd) {
+                      bgClasses = 'bg-[#0F52BA] border-[#0F52BA] text-white shadow-md font-black scale-95'
+                      label = isSelectedStart ? 'Mulai' : 'Selesai'
+                    } else if (isInSelectedRange) {
+                      bgClasses = 'bg-blue-100 border-blue-300 text-[#0F52BA] font-bold'
+                      label = 'Dipilih'
+                    }
+
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        onClick={() => !isPast && !isBooked && handleCalendarDateClick(dateStr)}
+                        disabled={isPast || isBooked}
+                        title={`${dateStr}: ${label}`}
+                        className={`h-11 rounded-lg border flex flex-col items-center justify-center transition p-0.5 text-xs relative ${bgClasses}`}
+                      >
+                        <span className="text-[12px] leading-none">{dayNum}</span>
+                        <span className="text-[8px] leading-tight scale-90 uppercase mt-0.5">
+                          {label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={handleBooking} className="space-y-5 pt-2">
               {/* Pilihan Layanan: Lepas Kunci vs Dengan Supir */}
               {vehicle.category === 'car' && vehicle.with_driver && (
@@ -307,10 +519,12 @@ function VehicleBookingContent() {
                 </div>
               )}
 
-              {/* Tanggal Sewa */}
+              {/* Tanggal Sewa (Bisa Diisi Manual atau Otomatis dari Kalender di Atas) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Tanggal Mulai Sewa</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tanggal Mulai Sewa
+                  </label>
                   <input
                     type="date"
                     required
@@ -320,7 +534,9 @@ function VehicleBookingContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Tanggal Selesai Sewa</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tanggal Selesai Sewa
+                  </label>
                   <input
                     type="date"
                     required
